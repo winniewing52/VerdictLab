@@ -6,6 +6,7 @@
 
 html {
   background-color: #0A0A0B;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -40,7 +41,7 @@ button, input, select { font: inherit; }
 .principle h3, .principle p { margin: 0; }
 .principle h3 { font-size: 12px; font-weight: 600; }
 .principle p { margin-top: 8px; color: #85858b; font-size: 10px; }
-.method-section { padding: 62px 0 70px; border-bottom: 1px solid #242427; }
+.method-section { scroll-margin-top: 24px; padding: 62px 0 70px; border-bottom: 1px solid #242427; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 30px; margin-bottom: 30px; }
 .section-heading h2 { margin: 14px 0 0; font-size: 27px; letter-spacing: -.03em; }
 .section-heading > p { color: #85858b; font-size: 11px; line-height: 1.55; text-align: right; }
@@ -86,7 +87,8 @@ button, input, select { font: inherit; }
 .model-card h3 { margin: 38px 0 18px; font-size: 27px; }
 .model-card p { color: #a0a0a5; font-size: 13px; line-height: 1.7; }
 .model-card hr { margin: 27px 0 19px; border: 0; border-top: 1px solid #29292c; }
-.model-card h4 { margin: 0 0 15px; color: #f2cb2e; font-size: 13px; font-weight: 500; }
+.model-disclosure { display: block; width: 100%; padding: 0; color: #f2cb2e; background: none; border: 0; text-align: left; font-size: 13px; font-weight: 500; cursor: pointer; }
+.model-limitations p { margin-bottom: 0; }
 .model-card a { display: inline-block; margin-top: 8px; color: #f2cb2e; font-size: 12px; font-weight: 600; }
 .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
 .trust-points article { display: flex; gap: 13px; margin-bottom: 24px; }
@@ -320,9 +322,9 @@ button, input, select { font: inherit; }
   min-height: 100vh;
 }
 .methodology-navbar {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 69px;
   min-height: 69px;
   padding: 0 36px;
@@ -332,6 +334,13 @@ button, input, select { font: inherit; }
   display: flex;
   align-items: center;
   gap: 9px;
+}
+.methodology-navbar nav {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  gap: 25px;
+  transform: translateX(-50%);
 }
 .methodology-navbar-brand > div {
   width: 25px;
@@ -349,11 +358,7 @@ button, input, select { font: inherit; }
 .methodology-navbar-brand > span span {
   color: #f2cb2e;
 }
-.methodology-navbar nav {
-  display: flex;
-  gap: 25px;
-  font: 10px "JetBrains Mono", monospace;
-}
+.methodology-navbar nav { font: 10px "JetBrains Mono", monospace; }
 .methodology-navbar a {
   color: #85858b;
   text-decoration: none;

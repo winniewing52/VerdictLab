@@ -8,12 +8,11 @@ export default function MethodologyNavbar() {
         <span>Verdict<span>Lab</span></span>
       </div>
       <nav>
-        <Link href="/methodology">Methodology</Link>
-        <Link href="/workspace/access">Model lab</Link>
-        <Link href="/workspace/access">The models</Link>
+        <Link href="/methodology#process">Methodology</Link>
+        <Link href="/methodology#model-lab">Model lab</Link>
+        <Link href="/methodology#models">The models</Link>
         <Link href="/methodology#trust">Trust &amp; limits</Link>
       </nav>
-      <Link className="methodology-navbar-preview" href="#">PAGE PREVIEW</Link>
     </header>
   );
 }
