@@ -12,6 +12,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from ..database import SessionLocal
 from ..models import Analysis
 from . import ingest
+from . import privacy
 from . import sentic
 
 STOPWORDS = {
@@ -35,11 +36,8 @@ def _set_stage(db: Session, analysis: Analysis, key: str, label: str, progress: 
     db.commit()
 
 def _clean(text: str) -> str:
-    text = re.sub(r"http\S+", "", text)
-    text = re.sub(r"(?<!\w)u/[A-Za-z0-9_-]+", "[user]", text)
-    text = re.sub(r"(?<!\w)@[A-Za-z0-9_]+", "[user]", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    """Text used for scoring and de-duplication (identical in every privacy mode)."""
+    return privacy.scoring_text(text)
 
 def _record_text(record) -> str:
     return record.get("text", "") if isinstance(record, dict) else record
@@ -221,12 +219,21 @@ def run_pipeline(
 
 
         _set_stage(db, analysis, "cleaning_dedup", "Cleaning & dedup", 10, "running")
+        privacy_mode = analysis.privacy_mode if analysis.privacy_mode in privacy.MODES else "redacted"
+        redaction_totals: Counter = Counter()
         cleaned, seen = [], set()
         for i, r in enumerate(records):
-            c = _clean(_record_text(r))
+            original = _record_text(r)
+            c = _clean(original)
             if c and c.lower() not in seen and len(c) > 3:
                 seen.add(c.lower())
-                cleaned.append({"text": c, "metadata": r if isinstance(r, dict) else {}})
+                stored_text, redaction_counts = privacy.apply_privacy(original, privacy_mode)
+                redaction_totals.update(redaction_counts)
+                cleaned.append({
+                    "text": c,
+                    "display": stored_text,
+                    "metadata": r if isinstance(r, dict) else {},
+                })
             if i % max(1, len(records) // 5) == 0:
                 pct = int(min(95, (i / max(1, len(records))) * 100))
                 _set_stage(db, analysis, "cleaning_dedup", "Cleaning & dedup", pct, "running")
@@ -263,7 +270,7 @@ def run_pipeline(
             emotion, emotion_source = _emotion(sn)
 
             scored.append({
-                "text": text[:500],
+                "text": item["display"][:500],
                 "vader_score": round(vader, 3),
                 "textblob_score": round(textblob, 3),
 
@@ -352,6 +359,15 @@ def run_pipeline(
             "avg_source_polarity": round(sum(s["source_polarity"] for s in scored) / total, 3),
 
             "scoring": _scoring_audit(scored),
+            "privacy": {
+                "mode": privacy_mode,
+                "redactions_applied": {k: int(redaction_totals.get(k, 0)) for k in ("emails", "phones", "handles", "urls")},
+                "note": (
+                    "Stored text has emails, phone numbers, usernames and links replaced with placeholders."
+                    if privacy_mode == "redacted"
+                    else "Stored text is kept as written. Scores are identical in both modes."
+                ),
+            },
             "evaluation": {
                 "status": "not_configured",
                 "message": "No independently labelled evaluation dataset is configured. "
@@ -468,6 +484,7 @@ def _build_report(analysis: Analysis, summary: dict, topics: list[str]) -> str:
 **Run:** {analysis.id}
 **Records collected:** {summary['total_records']} -> **{summary['records_after_dedup']}** after cleaning/dedup ({summary['dedup_rate_pct']}% removed)
 **Model quality:** not reported without an independently labelled evaluation set.
+**Privacy mode:** {summary['privacy']['mode']} ({summary['privacy']['note']})
 
 ## Sentiment breakdown
 - Positive: {sb['positive']}%

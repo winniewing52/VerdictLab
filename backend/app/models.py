@@ -33,6 +33,17 @@ class PendingSignup(Base):
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class LoginChallenge(Base):
+    """A pending second-factor check. Created after the password is correct, deleted once used."""
+    __tablename__ = "login_challenges"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False, index=True)
+    code = Column(String, nullable=False)
+    attempts = Column(Integer, default=0)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Session(Base):
     __tablename__ = "sessions"
 
@@ -46,7 +57,6 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(String, primary_key=True, default=gen_id)
-
 
     user_id = Column(String, nullable=True, index=True)
     title = Column(String, nullable=False)

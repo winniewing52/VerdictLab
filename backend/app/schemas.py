@@ -58,6 +58,20 @@ class AuthResponse(BaseModel):
     user_id: str
     email: str
 
+class LoginResponse(BaseModel):
+    """Either a finished sign-in (token set) or a request for the second factor."""
+    email: str
+    token: Optional[str] = None
+    user_id: Optional[str] = None
+    two_factor_required: bool = False
+    challenge_id: Optional[str] = None
+    delivered: Optional[bool] = None
+    dev_code: Optional[str] = None
+
+class VerifyLoginCodeRequest(BaseModel):
+    challenge_id: str
+    code: str
+
 class LogoutRequest(BaseModel):
     all_devices: bool = False
 

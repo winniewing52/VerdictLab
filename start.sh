@@ -10,6 +10,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Local review convenience: show sign-up / sign-in codes on screen when no SMTP server is set.
+# Anyone who can reach this server can then read those codes, so never leave this on in production.
+if [[ -z "${SMTP_HOST:-}" && -z "${VERDICTLAB_DEV_CODES:-}" ]]; then
+  export VERDICTLAB_DEV_CODES=true
+  echo "NOTE: no SMTP_HOST set, so verification codes will be shown on screen (VERDICTLAB_DEV_CODES=true)."
+fi
+
 echo "== Backend =="
 cd "$ROOT_DIR/backend"
 

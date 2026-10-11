@@ -1,6 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "pulse_session_token";
 const LAST_RUN_KEY = "pulse_last_run";
+const RETENTION_PREF_KEY = "verdictlab.privacy.retention";
 function authHeader(): Record<string, string> {
     if (typeof window === "undefined")
         return {};
@@ -107,6 +108,16 @@ export type AnalysisResults = {
             status: "not_configured" | "configured";
             message?: string;
         };
+        privacy?: {
+            mode: "redacted" | "raw";
+            redactions_applied: {
+                emails: number;
+                phones: number;
+                handles: number;
+                urls: number;
+            };
+            note: string;
+        };
     } | null;
     result_records: {
         text: string;
@@ -125,6 +136,16 @@ export type AnalysisResults = {
         explanation: string;
     }[] | null;
 };
+/** The retention choice saved on the Settings page (0 = keep until deleted). Undefined = server default. */
+function savedRetentionPreference(): 0 | 30 | 90 | 365 | undefined {
+    if (typeof window === "undefined")
+        return undefined;
+    const saved = window.localStorage.getItem(RETENTION_PREF_KEY);
+    if (saved === "forever")
+        return 0;
+    const days = Number(saved);
+    return days === 30 || days === 90 || days === 365 ? days : undefined;
+}
 export async function startAnalysis(params: {
     source_type: "reddit" | "youtube" | "csv";
     source_url?: string;
@@ -132,7 +153,7 @@ export async function startAnalysis(params: {
     file?: File;
     privacy_mode?: "redacted" | "raw";
     consent_public_data?: boolean;
-    retention_days?: 30 | 90 | 365;
+    retention_days?: 0 | 30 | 90 | 365;
 }): Promise<Analysis> {
     const form = new FormData();
     form.append("source_type", params.source_type);
@@ -144,8 +165,9 @@ export async function startAnalysis(params: {
         form.append("file", params.file);
     form.append("privacy_mode", params.privacy_mode ?? "redacted");
     form.append("consent_public_data", String(params.consent_public_data ?? false));
-    if (params.retention_days)
-        form.append("retention_days", String(params.retention_days));
+    const retention = params.retention_days ?? savedRetentionPreference();
+    if (retention !== undefined)
+        form.append("retention_days", String(retention));
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     let res: Response;
@@ -280,6 +302,16 @@ export type AuthResult = {
     userId: string;
     email: string;
 };
+export type TwoFactorChallenge = {
+    twoFactorRequired: true;
+    challengeId: string;
+    email: string;
+    delivered: boolean;
+    devCode?: string;
+};
+export type SignInResult = (AuthResult & {
+    twoFactorRequired?: false;
+}) | TwoFactorChallenge;
 export async function requestAccountVerification(email: string, password: string): Promise<SignupResult> {
     const data = await authFetch("/auth/signup", { email, password });
     return { email: data.email, delivered: data.delivered, devCode: data.dev_code ?? undefined };
@@ -293,8 +325,22 @@ export async function confirmAccountVerification(email: string, code: string): P
     storeSession(data.token);
     return { token: data.token, userId: data.user_id, email: data.email };
 }
-export async function signIn(email: string, password: string): Promise<AuthResult> {
+export async function signIn(email: string, password: string): Promise<SignInResult> {
     const data = await authFetch("/auth/login", { email, password });
+    if (data.two_factor_required) {
+        return {
+            twoFactorRequired: true,
+            challengeId: data.challenge_id,
+            email: data.email,
+            delivered: !!data.delivered,
+            devCode: data.dev_code ?? undefined,
+        };
+    }
+    storeSession(data.token);
+    return { token: data.token, userId: data.user_id, email: data.email };
+}
+export async function confirmTwoFactorSignIn(challengeId: string, code: string): Promise<AuthResult> {
+    const data = await authFetch("/auth/login/verify-2fa", { challenge_id: challengeId, code });
     storeSession(data.token);
     return { token: data.token, userId: data.user_id, email: data.email };
 }

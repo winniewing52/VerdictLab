@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -7,13 +9,19 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session as DBSession
 
 from ..database import get_db
-from ..emailer import send_verification_email
-from ..models import Analysis, PendingSignup, Session as SessionModel, User
+from ..emailer import (
+    can_deliver_codes,
+    dev_codes_enabled,
+    send_login_code_email,
+    send_verification_email,
+)
+from ..models import Analysis, LoginChallenge, PendingSignup, Session as SessionModel, User
 from ..schemas import (
     AuthResponse,
     ChangePasswordRequest,
     DeleteAccountRequest,
     LoginRequest,
+    LoginResponse,
     LogoutRequest,
     ProfileOut,
     ResendCodeRequest,
@@ -23,6 +31,7 @@ from ..schemas import (
     TwoFactorRequest,
     UpdateProfileRequest,
     VerifyCodeRequest,
+    VerifyLoginCodeRequest,
 )
 from ..security import (
     generate_session_token,
@@ -117,6 +126,8 @@ def _profile_out(user: User) -> ProfileOut:
 def signup(payload: SignupRequest, db: DBSession = Depends(get_db)):
     email = _normalize_email(payload.email)
 
+    if len(payload.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters.")
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "An account with this email has already been created. Please sign in instead.")
 
@@ -143,6 +154,8 @@ def signup(payload: SignupRequest, db: DBSession = Depends(get_db)):
 
     result = send_verification_email(email, code)
     if not result.delivered:
+        if dev_codes_enabled():
+            return SignupResponse(email=email, delivered=False, dev_code=code)
         raise HTTPException(503, "Verification email could not be sent. Please try again later.")
     return SignupResponse(email=email, delivered=True)
 
@@ -161,6 +174,8 @@ def resend_code(payload: ResendCodeRequest, db: DBSession = Depends(get_db)):
 
     result = send_verification_email(email, code)
     if not result.delivered:
+        if dev_codes_enabled():
+            return SignupResponse(email=email, delivered=False, dev_code=code)
         raise HTTPException(503, "Verification email could not be sent. Please try again later.")
     return SignupResponse(email=email, delivered=True)
 
@@ -181,7 +196,7 @@ def verify_code(payload: VerifyCodeRequest, request: Request, db: DBSession = De
         db.commit()
         raise HTTPException(429, "Too many incorrect attempts. Please request a new code.")
 
-    if payload.code.strip() != pending.code:
+    if not hmac.compare_digest(payload.code.strip(), pending.code):
         pending.attempts += 1
         db.commit()
         remaining = MAX_ATTEMPTS - pending.attempts
@@ -205,7 +220,32 @@ def verify_code(payload: VerifyCodeRequest, request: Request, db: DBSession = De
     token = _create_session(db, user, request)
     return AuthResponse(token=token, user_id=user.id, email=user.email)
 
-@router.post("/login", response_model=AuthResponse)
+def _start_two_factor_challenge(db: DBSession, user: User) -> LoginResponse:
+    """Password was right and the account has two-factor on: send a one-time code, issue no session yet."""
+    db.query(LoginChallenge).filter(LoginChallenge.user_id == user.id).delete()
+    code = generate_verification_code()
+    challenge = LoginChallenge(
+        id=secrets.token_urlsafe(24),
+        user_id=user.id,
+        code=code,
+        attempts=0,
+        expires_at=datetime.utcnow() + timedelta(minutes=CODE_TTL_MINUTES),
+    )
+    db.add(challenge)
+    db.commit()
+
+    result = send_login_code_email(user.email, code)
+    if result.delivered:
+        return LoginResponse(email=user.email, two_factor_required=True,
+                             challenge_id=challenge.id, delivered=True)
+    if dev_codes_enabled():
+        return LoginResponse(email=user.email, two_factor_required=True,
+                             challenge_id=challenge.id, delivered=False, dev_code=code)
+    db.delete(challenge)
+    db.commit()
+    raise HTTPException(503, "The sign-in code could not be sent. Please try again later.")
+
+@router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, request: Request, db: DBSession = Depends(get_db)):
     email = _normalize_email(payload.email)
     user = db.query(User).filter(User.email == email).first()
@@ -213,6 +253,42 @@ def login(payload: LoginRequest, request: Request, db: DBSession = Depends(get_d
         raise HTTPException(404, "No account found for this email. Please create an account first.")
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Incorrect password. Please try again.")
+
+    if user.two_factor_enabled:
+        return _start_two_factor_challenge(db, user)
+
+    token = _create_session(db, user, request)
+    return LoginResponse(email=user.email, token=token, user_id=user.id)
+
+@router.post("/login/verify-2fa", response_model=AuthResponse)
+def verify_login_code(payload: VerifyLoginCodeRequest, request: Request, db: DBSession = Depends(get_db)):
+    challenge = db.get(LoginChallenge, payload.challenge_id)
+    if not challenge:
+        raise HTTPException(400, "This sign-in attempt has expired. Please sign in again.")
+    if datetime.utcnow() > challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(400, "That code has expired. Please sign in again.")
+    if challenge.attempts >= MAX_ATTEMPTS:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(429, "Too many incorrect attempts. Please sign in again.")
+
+    if not hmac.compare_digest(payload.code.strip(), challenge.code):
+        challenge.attempts += 1
+        remaining = MAX_ATTEMPTS - challenge.attempts
+        if remaining <= 0:
+            db.delete(challenge)
+            db.commit()
+            raise HTTPException(429, "Too many incorrect attempts. Please sign in again.")
+        db.commit()
+        raise HTTPException(400, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} left.")
+
+    user = db.get(User, challenge.user_id)
+    db.delete(challenge)
+    db.commit()
+    if not user:
+        raise HTTPException(401, "Session is invalid or has expired.")
 
     token = _create_session(db, user, request)
     return AuthResponse(token=token, user_id=user.id, email=user.email)
@@ -294,7 +370,6 @@ def change_password(
     db.commit()
     return {"ok": True}
 
-
 @router.post("/two-factor", response_model=ProfileOut)
 def update_two_factor(
     payload: TwoFactorRequest,
@@ -304,11 +379,16 @@ def update_two_factor(
     user, _, _ = current
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(401, "Password is incorrect.")
+    if payload.enabled and not can_deliver_codes():
+        raise HTTPException(
+            400,
+            "This server has no email delivery configured, so sign-in codes could not reach you. "
+            "Two-factor was not enabled.",
+        )
     user.two_factor_enabled = 1 if payload.enabled else 0
     db.commit()
     db.refresh(user)
     return _profile_out(user)
-
 
 @router.get("/sessions", response_model=list[SessionOut])
 def list_sessions(current: tuple = Depends(get_current_user), db: DBSession = Depends(get_db)):
@@ -330,7 +410,6 @@ def list_sessions(current: tuple = Depends(get_current_user), db: DBSession = De
         for s in sessions
     ]
 
-
 @router.delete("/sessions/{session_id}")
 def revoke_session(
     session_id: str,
@@ -347,7 +426,6 @@ def revoke_session(
     db.commit()
     return {"ok": True}
 
-
 @router.post("/sessions/revoke-others")
 def revoke_other_sessions(current: tuple = Depends(get_current_user), db: DBSession = Depends(get_db)):
     user, _, token = current
@@ -358,7 +436,6 @@ def revoke_other_sessions(current: tuple = Depends(get_current_user), db: DBSess
     )
     db.commit()
     return {"ok": True, "revoked": count}
-
 
 @router.delete("/account")
 def delete_account(
@@ -371,6 +448,7 @@ def delete_account(
         raise HTTPException(401, "Incorrect password.")
     db.query(SessionModel).filter(SessionModel.user_id == user.id).delete()
     db.query(Analysis).filter(Analysis.user_id == user.id).delete()
+    db.query(LoginChallenge).filter(LoginChallenge.user_id == user.id).delete()
     db.delete(user)
     db.commit()
     return {"ok": True}

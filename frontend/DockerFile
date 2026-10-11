@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# The browser calls the API, so this must be an address the browser can reach
+ARG NEXT_PUBLIC_API_BASE=http://localhost:8000
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+RUN npm run build
+
+EXPOSE 3000
+CMD ["npm", "start"]

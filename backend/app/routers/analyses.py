@@ -13,7 +13,6 @@ from ..services.pipeline import run_pipeline
 from ..services import sentic
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
-DEMO_SOURCE_URL = "https://www.reddit.com/r/IranWarReport/"
 
 DEFAULT_STAGES = {
     "collecting_content": {"label": "Collecting content", "progress": 0, "status": "queued"},
@@ -51,19 +50,23 @@ def _load_owned(db: Session, analysis_id: str, user: Optional[User]) -> Analysis
 
 @router.get("/demo/sample")
 def get_demo_sample(db: Session = Depends(get_db)):
-    """Return the cached analysis sourced from the public Reddit demo community."""
+    """Return the public sample analysis (created automatically on first start-up)."""
     analysis = (
         db.query(Analysis)
-        .filter(
-            Analysis.is_demo == 1,
-            Analysis.source_url == DEMO_SOURCE_URL,
-            Analysis.status == "complete",
-        )
+        .filter(Analysis.is_demo == 1, Analysis.status == "complete")
         .order_by(Analysis.updated_at.desc())
         .first()
     )
     if not analysis:
-        raise HTTPException(503, "The sample analysis is not available yet.")
+        still_building = db.query(Analysis).filter(
+            Analysis.is_demo == 1, Analysis.status.in_(("queued", "running"))
+        ).first()
+        raise HTTPException(
+            503,
+            "The sample analysis is still being prepared. Retry in a minute."
+            if still_building else
+            "The sample analysis is not available. Check that SenticNet is installed, then restart the API.",
+        )
     return _serialize(analysis)
 
 @router.post("")
@@ -93,8 +96,9 @@ def create_analysis(
         raise HTTPException(400, "privacy_mode must be redacted or raw")
     if source_type in ("reddit", "youtube") and not consent_public_data:
         raise HTTPException(400, "Confirm that you have a lawful basis to analyse this public content.")
-    if retention_days is not None and retention_days not in (30, 90, 365):
-        raise HTTPException(400, "retention_days must be 30, 90, 365, or omitted.")
+    if retention_days is not None and retention_days not in (0, 30, 90, 365):
+        raise HTTPException(400, "retention_days must be 0 (keep until deleted), 30, 90 or 365.")
+    effective_retention = None if (source_type == "csv" or not retention_days) else retention_days
 
     analysis = Analysis(
         user_id=user.id,
@@ -104,7 +108,7 @@ def create_analysis(
         uploaded_filename=file.filename if file else None,
         privacy_mode=privacy_mode,
         consent_public_data=int(consent_public_data),
-        retention_days=retention_days,
+        retention_days=effective_retention,
         stages=DEFAULT_STAGES,
         status="queued",
     )

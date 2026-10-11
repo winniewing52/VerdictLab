@@ -26,18 +26,28 @@ slice (0–80 vs 81+ characters) so the result can say where a model wins or
 loses instead of hiding behind one aggregate number. No threshold tuning is
 performed on the uploaded test set.
 
+## Reproducing the comparison
+
+```bash
+cd backend
+python scripts/run_benchmark.py
+```
+
+This downloads the official TweetEval sentiment **test** split, maps its labels
+(0/1/2 = negative/neutral/positive), runs the evaluator above with fixed thresholds and writes
+`benchmarks/tweeteval_sentiment_test.json` and `.md`. `--limit N` runs a seeded random subset for a
+quick smoke test and writes a file marked `SMOKE`; never quote those numbers.
+
 The research question for this comparison is:
 
 > Does explainable concept-level analysis reach the same conclusions as
 > standard sentiment tools on real public debate, and when does it disagree?
 
-Do not fill the result with production labels, SenticNet-derived labels, or
+Quote only numbers from a full-split run whose JSON file is committed. Do not fill the result with production labels, SenticNet-derived labels, or
 hand-written sanity examples. Those are useful for exploration, not human
-ground truth. The repository currently contains no human-labelled held-out
-set, so it intentionally does not publish a benchmark finding yet. The next
-reproducible step is to add a versioned CSV with at least 100 independently
-labelled rows, freeze the split, record annotator agreement, upload it to the
-endpoint, and preserve the JSON response as the evaluation artifact.
+ground truth. The repository ships no human-labelled data of its own. The published TweetEval
+test split is the labelled evidence, and `scripts/run_benchmark.py` is how it is
+evaluated. Until its output files are committed, no benchmark finding is claimed.
 
 The four Hourglass dimensions are currently SenticNet-derived exploratory
 indicators. They are not validated emotion labels. A separate human-labelled

@@ -1,6 +1,8 @@
 import logging
 import os
+import threading
 import traceback
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,14 +10,29 @@ from fastapi.responses import JSONResponse
 
 from .database import Base, engine, run_startup_migrations
 from .routers import analyses, auth, live, evaluations
+from .services.demo_seed import start_demo_seed_thread
+from .services.retention import purge_expired, start_retention_worker
 
 logger = logging.getLogger("verdictlab")
 
 Base.metadata.create_all(bind=engine)
 run_startup_migrations()
 
-app = FastAPI(title="VerdictLab API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start-up: purge expired data, create the demo sample, keep sweeping in the background."""
+    stop = threading.Event()
+    try:
+        purge_expired()
+    except Exception:
+        logger.exception("Initial retention sweep failed")
+    start_retention_worker(stop)
+    if os.getenv("VERDICTLAB_SKIP_DEMO_SEED", "").lower() not in ("1", "true", "yes"):
+        start_demo_seed_thread()
+    yield
+    stop.set()
 
+app = FastAPI(title="VerdictLab API", version="0.2.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def catch_unexpected_errors(request: Request, call_next):

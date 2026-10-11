@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////data/verdictlab.db
+      FRONTEND_URLS: http://localhost:3000
+      # REVIEW/DEMO ONLY: shows sign-up and sign-in codes on screen so nobody needs an email
+      # provider. Remove this line for any real deployment
+      VERDICTLAB_DEV_CODES: "true"
+    volumes:
+      - verdictlab-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  verdictlab-data:

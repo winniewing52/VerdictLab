@@ -1,9 +1,9 @@
 "use client";
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AccountError, confirmAccountVerification, requestAccountVerification, resendVerificationCode, signIn, startAnalysis, } from "@/lib/api";
+import { AccountError, confirmAccountVerification, confirmTwoFactorSignIn, requestAccountVerification, resendVerificationCode, signIn, startAnalysis, } from "@/lib/api";
 type Mode = "sign-in" | "create";
-type CreateStep = "credentials" | "verify";
+type CreateStep = "credentials" | "verify" | "two-factor";
 function WorkspaceAccessInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -16,6 +16,7 @@ function WorkspaceAccessInner() {
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [devCode, setDevCode] = useState<string | null>(null);
+    const [challengeId, setChallengeId] = useState<string | null>(null);
     function switchMode(next: Mode) {
         setMode(next);
         setStep("credentials");
@@ -23,6 +24,7 @@ function WorkspaceAccessInner() {
         setNotice(null);
         setDevCode(null);
         setCode("");
+        setChallengeId(null);
     }
     async function finishSignIn() {
         const sourceUrl = searchParams.get("url");
@@ -53,8 +55,23 @@ function WorkspaceAccessInner() {
         setSubmitting(true);
         try {
             if (mode === "sign-in") {
-                await signIn(email, password);
-                await finishSignIn();
+                const result = await signIn(email, password);
+                if (result.twoFactorRequired) {
+                    setChallengeId(result.challengeId);
+                    if (result.delivered) {
+                        setNotice(`Two-factor is on for this account. We sent a 6-digit sign-in code to ${result.email}.`);
+                        setDevCode(null);
+                    }
+                    else {
+                        setNotice(`Two-factor sign-in code for ${result.email} (dev mode - no email backend configured):`);
+                        setDevCode(result.devCode ?? null);
+                    }
+                    setCode("");
+                    setStep("two-factor");
+                }
+                else {
+                    await finishSignIn();
+                }
             }
             else {
                 const result = await requestAccountVerification(email, password);
@@ -85,7 +102,14 @@ function WorkspaceAccessInner() {
         setError(null);
         setSubmitting(true);
         try {
-            await confirmAccountVerification(email, code);
+            if (step === "two-factor") {
+                if (!challengeId)
+                    throw new AccountError("This sign-in attempt has expired. Please sign in again.");
+                await confirmTwoFactorSignIn(challengeId, code);
+            }
+            else {
+                await confirmAccountVerification(email, code);
+            }
             await finishSignIn();
         }
         catch (accountError) {
@@ -96,6 +120,11 @@ function WorkspaceAccessInner() {
         }
     }
     async function handleResend() {
+        if (step === "two-factor") {
+            switchMode("sign-in");
+            setNotice("Enter your password again to get a new sign-in code.");
+            return;
+        }
         setError(null);
         setSubmitting(true);
         try {
@@ -152,16 +181,15 @@ function WorkspaceAccessInner() {
                     {submitting ? (mode === "sign-in" ? "Signing in..." : "Sending code...") : mode === "sign-in" ? "Sign in" : "Create account"}
                   </button>
                   {error && <p className="mt-3 font-mono text-xs text-alert">{error}</p>}
+                  {notice && !error && <p className="mt-3 font-mono text-xs text-muted">{notice}</p>}
                 </form>
 
-                <div className="my-8 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-muted"><span className="h-px flex-1 bg-line"/> or <span className="h-px flex-1 bg-line"/></div>
-                <button type="button" onClick={() => { window.location.href = "https://accounts.google.com/"; }} className="w-full border border-line py-3.5 text-sm font-semibold text-foreground transition hover:border-muted">Continue with Google</button>
-                <p className="mt-7 font-mono text-[10px] uppercase leading-relaxed tracking-wide text-muted">By continuing you agree to analyse public data responsibly under fair-use terms.</p>
+                <p className="mt-8 font-mono text-[10px] uppercase leading-relaxed tracking-wide text-muted">By continuing you agree to analyse public data responsibly under fair-use terms.</p>
               </>) : (<>
-                <button type="button" onClick={() => { setStep("credentials"); setError(null); setNotice(null); setDevCode(null); setCode(""); }} className="mb-6 font-mono text-xs uppercase tracking-wider text-muted transition hover:text-white">
+                <button type="button" onClick={() => { setStep("credentials"); setError(null); setNotice(null); setDevCode(null); setCode(""); setChallengeId(null); }} className="mb-6 font-mono text-xs uppercase tracking-wider text-muted transition hover:text-white">
                   <span className="mr-2 text-base">←</span> Back
                 </button>
-                <p className="mb-2 font-mono text-xs font-medium uppercase tracking-wide text-signal">Verify your email</p>
+                <p className="mb-2 font-mono text-xs font-medium uppercase tracking-wide text-signal">{step === "two-factor" ? "Two-factor sign-in" : "Verify your email"}</p>
                 <h2 className="mb-6 text-2xl font-bold leading-tight">Enter the code we sent to<br />{email}</h2>
 
                 {notice && (<div className="mb-6 border border-line bg-ink p-4 font-mono text-xs leading-relaxed text-muted">
@@ -173,13 +201,13 @@ function WorkspaceAccessInner() {
                   <label htmlFor="verification-code" className="mb-2 block text-sm font-semibold">Verification code</label>
                   <input id="verification-code" type="text" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} placeholder="000000" className="w-full border border-line bg-transparent px-4 py-3 text-center text-lg tracking-[0.5em] outline-none placeholder:text-muted focus:border-signal"/>
                   <button type="submit" disabled={submitting} className="mt-5 w-full bg-signal py-3.5 font-semibold text-ink transition hover:brightness-95 disabled:opacity-60">
-                    {submitting ? "Verifying..." : "Verify & create account"}
+                    {submitting ? "Verifying..." : step === "two-factor" ? "Verify & sign in" : "Verify & create account"}
                   </button>
                   {error && <p className="mt-3 font-mono text-xs text-alert">{error}</p>}
                 </form>
 
                 <button type="button" onClick={handleResend} disabled={submitting} className="mt-6 font-mono text-xs uppercase tracking-wide text-muted underline-offset-4 transition hover:text-white hover:underline disabled:opacity-60">
-                  Didn't get it? Resend code
+                  {step === "two-factor" ? "Didn't get it? Start sign-in again" : "Didn't get it? Resend code"}
                 </button>
               </>)}
           </section>

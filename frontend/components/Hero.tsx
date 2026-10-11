@@ -13,6 +13,12 @@ export default function Hero() {
         getDemoSample().then(setSample).catch(() => {
         });
     }, []);
+    const community = sample?.source_url?.match(/reddit\.com\/r\/([^/]+)/i)?.[1];
+    const sourceLabel = community
+        ? `r/${community}`
+        : sample?.source_url?.startsWith("demo://")
+            ? "Synthetic sample"
+            : "Public conversation";
     function handleStart(e: React.FormEvent) {
         e.preventDefault();
         if (!url.trim()) {
@@ -63,11 +69,9 @@ export default function Hero() {
                   Source
                 </p>
                 <p className="mt-2 truncate text-sm font-semibold text-[#EDEDEF]">
-                  {sample?.source_url?.match(/reddit\.com\/r\/([^/]+)/i)?.[1]
-            ? `r/${sample.source_url.match(/reddit\.com\/r\/([^/]+)/i)?.[1]}`
-            : "Reddit sample"}
+                  {sourceLabel}
                 </p>
-                <p className="mt-1 text-xs text-[#8b8b90]">posts + comments</p>
+                <p className="mt-1 text-xs text-[#8b8b90]">{sample?.source_url?.startsWith("demo://") ? "made-up demo comments" : "posts + comments"}</p>
               </div>
               <div className="hidden text-center text-xl text-signal sm:block" aria-hidden="true">
                 →
@@ -111,7 +115,7 @@ export default function Hero() {
           <div className="mt-4 font-['Space_Mono',ui-monospace,monospace] text-xs">
             {error ? (<p role="alert" className="text-alert">
                 {error}
-              </p>) : (<p className="text-[#8b8b90]">Live sample ready</p>)}
+              </p>) : (<p className="text-[#8b8b90]">{sample ? "Sample analysis ready" : "Sample analysis loading…"}</p>)}
           </div>
         </form>
       </div>
