@@ -1,0 +1,82 @@
+{
+  "eyebrow": "Behind the verdict",
+  "title": ["No black box.", "Just evidence."],
+  "intro": "A verdict is only as useful as the method behind it. Follow the journey from public conversation to explainable insight—and see where the limits are.",
+  "principles": [
+    { "icon": "layers", "title": "3 complementary models", "description": "Different approaches. A clearer picture." },
+    { "icon": "privacy", "title": "Privacy-conscious", "description": "Cleaned text. Supported PII redaction." },
+    { "icon": "cross-check", "title": "Cross-checked results", "description": "Disagreement stays visible." },
+    { "icon": "evidence", "title": "Traceable evidence", "description": "Back to the original conversation." }
+  ],
+  "stages": [
+    { "number": "01", "icon": "database", "title": "Collect", "description": "Public conversations", "detailTitle": "Start with the conversation, not a conclusion.", "detail": "VerdictLab accepts public Reddit and YouTube conversations, or an uploaded CSV / XLSX dataset. The source and available dates stay attached to the analysis so the results have context.", "input": "Public conversation or uploaded dataset", "output": "Text records with source information" },
+    { "number": "02", "icon": "shield", "title": "Clean & protect", "description": "Less noise. More privacy.", "detailTitle": "Prepare the text without losing its trail.", "detail": "Records are normalized for analysis and supported personal-information patterns are redacted before scoring. Original source references remain available for traceability.", "input": "Collected text records", "output": "Normalized, privacy-aware records" },
+    { "number": "03", "icon": "scan", "title": "Score", "description": "Three complementary models", "detailTitle": "Read the same words three ways.", "detail": "Concept-based, rule-based, and lexicon-based approaches each surface a different signal. No single model is treated as the final truth.", "input": "Prepared text", "output": "Per-record model scores" },
+    { "number": "04", "icon": "cross-check", "title": "Cross-check", "description": "Make disagreement visible", "detailTitle": "Agreement is a signal. Disagreement is a prompt.", "detail": "Model outputs are compared side by side. Differences are retained so you can investigate ambiguity instead of having it averaged away.", "input": "Model outputs", "output": "Comparison and disagreement signals" },
+    { "number": "05", "icon": "evidence", "title": "Explain", "description": "A verdict you can trace", "detailTitle": "The method travels with the verdict.", "detail": "Explore the supporting records, model perspectives, and known limitations behind each summary before drawing a conclusion.", "input": "Cross-checked results", "output": "Evidence-backed insight" }
+  ],
+  "examples": [
+    {
+      "label": "Positive",
+      "quote": "“This is a great improvement. I really love the new design!”",
+      "note": "Educational sample · not a live prediction",
+      "scores": [
+        { "model": "SenticNet", "value": 0.72, "description": "Concept-based perspective" },
+        { "model": "VADER", "value": 0.85, "description": "Social-text rules and lexicon" },
+        { "model": "TextBlob", "value": 0.65, "description": "Pattern-based polarity perspective" }
+      ],
+      "callout": "Similar positive readings strengthen the signal. They do not guarantee a correct interpretation."
+    },
+    {
+      "label": "Negative",
+      "quote": "“This update made everything slower and harder to use.”",
+      "note": "Educational sample · not a live prediction",
+      "scores": [
+        { "model": "SenticNet", "value": -0.61, "description": "Concept-based perspective" },
+        { "model": "VADER", "value": -0.74, "description": "Social-text rules and lexicon" },
+        { "model": "TextBlob", "value": -0.58, "description": "Pattern-based polarity perspective" }
+      ],
+      "callout": "Agreement can make a signal clearer, but context and sampling still determine what it means."
+    },
+    {
+      "label": "Neutral",
+      "quote": "“The announcement is scheduled for Thursday at 10am.”",
+      "note": "Educational sample · not a live prediction",
+      "scores": [
+        { "model": "SenticNet", "value": 0.04, "description": "Concept-based perspective" },
+        { "model": "VADER", "value": 0.02, "description": "Social-text rules and lexicon" },
+        { "model": "TextBlob", "value": 0.00, "description": "Pattern-based polarity perspective" }
+      ],
+      "callout": "A neutral score describes the text signal, not the importance of the conversation."
+    },
+    {
+      "label": "Sarcasm",
+      "quote": "“Fantastic, another redesign that fixes absolutely nothing.”",
+      "note": "Educational sample · not a live prediction",
+      "scores": [
+        { "model": "SenticNet", "value": 0.22, "description": "Concept-based perspective" },
+        { "model": "VADER", "value": -0.18, "description": "Social-text rules and lexicon" },
+        { "model": "TextBlob", "value": 0.11, "description": "Pattern-based polarity perspective" }
+      ],
+      "callout": "Sarcasm can reverse apparent meaning. Disagreement is a reason to inspect the original text."
+    }
+  ],
+  "models": [
+    { "icon": "spark", "type": "Concept-based", "name": "SenticNet", "description": "Looks beyond individual words to connect concepts with sentiment and affective meaning.", "limitation": "Concept coverage matters. When concepts are unavailable, the uploaded pipeline can fall back to VADER. Hourglass emotion dimensions are exploratory, not validated emotion diagnoses.", "source": "https://sentic.net/" },
+    { "icon": "scan", "type": "Rule-based", "name": "VADER", "description": "A social-text specialist that accounts for emphasis, punctuation, negation, and sentiment-bearing words.", "limitation": "Its lexicon and rules provide an interpretable comparison baseline, but sarcasm, domain-specific language, and context can still mislead it.", "source": "https://github.com/cjhutto/vaderSentiment" },
+    { "icon": "layers", "type": "Lexicon-based", "name": "TextBlob", "description": "Provides another perspective on polarity, helping reveal when different approaches read the same text differently.", "limitation": "Polarity runs from −1 to +1. Its language patterns and lexicon do not fully understand social context or subtle intent. Scores are not directly interchangeable across models.", "source": "https://textblob.readthedocs.io/" }
+  ],
+  "trustPoints": [
+    { "title": "Evidence before certainty", "description": "Read the supporting comments, sample context, and model differences—not just the headline verdict." },
+    { "title": "Privacy is part of the process", "description": "Supported personal-information patterns are redacted before scoring. Avoid uploading sensitive or private conversations." },
+    { "title": "Evaluation, not inflated claims", "description": "The project includes evaluation workflows with accuracy, macro-F1, and bootstrap intervals. This preview makes no unverified performance claim." },
+    { "title": "People stay in the loop", "description": "Use the results to explore conversation, not to diagnose people, make high-stakes decisions, or claim what the entire public believes." }
+  ],
+  "faqs": [
+    { "question": "Can VerdictLab understand sarcasm?", "answer": "Not reliably. Sarcasm can reverse the apparent meaning of positive words. Model disagreement can flag a reason to inspect the text, but all models can also agree and still be wrong." },
+    { "question": "Does “high confidence” mean the verdict is correct?", "answer": "No. Confidence is a heuristic based on sample size and model agreement. It is not a calibrated probability, an accuracy score, or proof that sampled opinions represent the public." },
+    { "question": "How is the methodology evaluated?", "answer": "The project includes an evaluation workflow for an independently labelled sentiment test set. It measures accuracy and macro-F1 with 95% bootstrap confidence intervals. Emotion dimensions are not validated by a sentiment benchmark." },
+    { "question": "What about Malay or mixed-language comments?", "answer": "The included tools are primarily English-oriented. Malay, code-switching, local slang, and multilingual conversations need separate validation. Treat results cautiously rather than assuming equivalent performance." },
+    { "question": "Is a public conversation the same as public opinion?", "answer": "No. A platform, community, collection window, and available sample all shape the result. A verdict describes the collected conversation, and it does not establish cause and effect." }
+  ]
+}

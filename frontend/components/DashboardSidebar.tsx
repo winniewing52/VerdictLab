@@ -112,7 +112,7 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
         { label: "Live Analyser", icon: "live", href: link("live") },
     ];
     const about = [
-        { label: "Methodology", icon: "methodology", href: "#methodology" },
+        { label: "Methodology", icon: "methodology", href: "/methodology" },
         { label: "Ethics & Limits", icon: "ethics", href: "#ethics" },
     ];
     async function confirmLogout(allDevices: boolean) {
