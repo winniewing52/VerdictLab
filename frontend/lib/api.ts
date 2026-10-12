@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE
+    || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://127.0.0.1:8000");
 const SESSION_TOKEN_KEY = "pulse_session_token";
 const LAST_RUN_KEY = "pulse_last_run";
 const RETENTION_PREF_KEY = "verdictlab.privacy.retention";
@@ -169,16 +170,17 @@ export async function startAnalysis(params: {
     if (retention !== undefined)
         form.append("retention_days", String(retention));
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    // Free hosted instances may need time to wake before accepting a larger upload.
+    const timeout = window.setTimeout(() => controller.abort(), 120000);
     let res: Response;
     try {
         res = await fetch(`${API_BASE}/analyses`, { method: "POST", body: form, headers: authHeader(), signal: controller.signal });
     }
     catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-            throw new Error("The analysis service did not respond. Start the backend on port 8000 and try again.");
+            throw new Error("The analysis service did not respond within 2 minutes. The hosted service may be waking up; please try again.");
         }
-        throw new Error("The analysis service is unavailable. Start the backend on port 8000 and try again.");
+        throw new Error("The hosted analysis service is unavailable. Please try again in a moment.");
     }
     finally {
         window.clearTimeout(timeout);
