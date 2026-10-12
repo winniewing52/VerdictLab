@@ -7,7 +7,6 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
-COPY scripts ./scripts
 
 # Fail the build if the SenticNet lexicon cannot load.
 RUN python -c "from app.services import sentic; assert sentic.available(), sentic.load_error()"
