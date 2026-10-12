@@ -503,6 +503,197 @@ button, input, select { font: inherit; }
     flex: 0 0 224px;
   }
 
+  /* Ethics and limitations page */
+  .ethics-page {
+    min-height: 100vh;
+    background: #09090a;
+    color: #e9e9ea;
+  }
+  .ethics-shell {
+    width: calc(100% - 32px);
+    margin: 0 auto;
+    padding: 58px 0 80px;
+  }
+  .ethics-eyebrow {
+    margin: 0;
+    color: #f3cc20;
+    font: 10px "JetBrains Mono", monospace;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .ethics-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 50px;
+    padding-bottom: 38px;
+  }
+  .ethics-hero h1 {
+    margin: 20px 0 10px;
+    font: 78px/.95 "Anton", Impact, sans-serif;
+    letter-spacing: .01em;
+    text-transform: uppercase;
+  }
+  .ethics-hero h2 {
+    margin: 0;
+    color: #f3cc20;
+    font: 36px/.95 "Anton", Impact, sans-serif;
+    text-transform: uppercase;
+  }
+  .ethics-intro {
+    max-width: 500px;
+    margin: 30px 0 0;
+    color: #929297;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .ethics-hero-action {
+    min-width: 195px;
+    color: #0b0b0c;
+    text-align: center;
+    text-decoration: none;
+  }
+  .ethics-hero-action span {
+    display: block;
+    padding: 14px 16px;
+    background: #f3cc20;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .ethics-hero-action b { margin-left: 7px; font-size: 17px; }
+  .ethics-hero-action small {
+    display: block;
+    margin-top: 10px;
+    color: #6d6d72;
+    font: 8px "JetBrains Mono", monospace;
+    text-transform: uppercase;
+  }
+  .ethics-principles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid #252528;
+    border-bottom: 1px solid #252528;
+  }
+  .ethics-principles article {
+    display: flex;
+    gap: 10px;
+    min-height: 74px;
+    padding: 20px 15px 16px 0;
+    border-right: 1px solid #252528;
+  }
+  .ethics-principles article:not(:first-child) { padding-left: 18px; }
+  .ethics-principles article:last-child { border-right: 0; }
+  .ethics-symbol { color: #f3cc20; font-size: 19px; line-height: 1; }
+  .ethics-principles h3 { margin: 0; font-size: 12px; }
+  .ethics-principles p { margin: 7px 0 0; color: #85858a; font-size: 10px; }
+  .ethics-section {
+    padding: 56px 0 62px;
+    border-bottom: 1px solid #252528;
+  }
+  .ethics-section-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 30px;
+    margin-bottom: 27px;
+  }
+  .ethics-section-heading h2 {
+    margin: 14px 0 0;
+    font-size: 26px;
+    letter-spacing: -.035em;
+  }
+  .ethics-side-note {
+    max-width: 220px;
+    margin: 0;
+    color: #929297;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+  .ethics-outline-label {
+    padding: 7px 10px;
+    border: 1px solid #252528;
+    color: #f3cc20;
+    font: 8px "JetBrains Mono", monospace;
+    text-transform: uppercase;
+  }
+  .scenario-layout {
+    display: grid;
+    grid-template-columns: 335px 1fr;
+    gap: 38px;
+  }
+  .scenario-list { display: grid; gap: 8px; align-content: start; }
+  .scenario-tab {
+    display: grid;
+    grid-template-columns: 27px 1fr 15px;
+    align-items: center;
+    gap: 0;
+    min-height: 51px;
+    padding: 0 13px;
+    color: #d2d2d5;
+    background: #111113;
+    border: 1px solid #252528;
+    border-radius: 3px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .scenario-tab span { color: #85858a; font: 10px "JetBrains Mono", monospace; }
+  .scenario-tab strong { font-size: 11px; }
+  .scenario-tab b { color: #b8b8bc; font-size: 15px; font-weight: 400; }
+  .scenario-tab.active { color: #f3cc20; border-color: #f3cc20; background: #171611; }
+  .scenario-detail { padding: 2px 0 0; }
+  .scenario-status { margin: 0 0 15px; color: #f3cc20; font: 9px "JetBrains Mono", monospace; }
+  .scenario-detail.danger .scenario-status { color: #fb6f5e; }
+  .scenario-detail h3 { margin: 0 0 10px; font-size: 20px; }
+  .scenario-description, .scenario-boundary p, .scenario-next p { color: #949499; font-size: 11px; line-height: 1.65; }
+  .scenario-description { margin: 0 0 22px; }
+  .scenario-boundary { border-top: 1px solid #252528; padding-top: 18px; }
+  .scenario-next { margin-top: 16px; padding: 10px 0 0 14px; border-left: 2px solid #f3cc20; }
+  .scenario-detail.danger .scenario-next { border-color: #f3cc20; }
+  .scenario-boundary small, .scenario-next small, .boundaries-grid small { color: #f3cc20; font: 8px "JetBrains Mono", monospace; text-transform: uppercase; }
+  .scenario-boundary p, .scenario-next p { margin: 9px 0 0; }
+  .privacy-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 65px; align-items: start; }
+  .privacy-copy h3 { margin: 0 0 14px; font-size: 23px; }
+  .privacy-copy > p { max-width: 530px; margin: 0; color: #99999e; font-size: 13px; line-height: 1.75; }
+  .privacy-copy ul { margin: 22px 0 30px; padding-left: 21px; color: #a2a2a7; font-size: 12px; line-height: 2.2; }
+  .privacy-copy > small { color: #85858a; font: 9px "JetBrains Mono", monospace; text-transform: uppercase; }
+  .record-card { padding: 28px; background: #111113; border: 1px solid #29292c; border-radius: 4px; }
+  .record-card-header { display: flex; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid #29292c; color: #85858a; font: 10px "JetBrains Mono", monospace; text-transform: uppercase; }
+  .record-card-header span:last-child { color: #9a9a9e; font-size: 18px; }
+  .record-toggle { display: flex; gap: 8px; margin: 25px 0 28px; }
+  .record-toggle button { padding: 9px 13px; color: #e7e7e9; background: transparent; border: 1px solid #29292c; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .record-toggle button.active { color: #f3cc20; border-color: #f3cc20; }
+  .record-text { min-height: 150px; margin: 0; font-size: 22px; line-height: 1.8; }
+  .record-warning { display: flex; gap: 12px; margin: 22px 0 0; padding-top: 22px; border-top: 1px solid #29292c; color: #f3cc20; font-size: 12px; line-height: 1.55; }
+  .record-warning span { font-size: 20px; }
+  .boundaries-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 35px; }
+  .boundaries-grid article { min-height: 201px; padding: 0 0 27px; border-bottom: 1px solid #252528; }
+  .boundaries-grid article:nth-child(n+3) { padding-top: 23px; }
+  .boundaries-grid header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .boundaries-grid header span { color: #f3cc20; font: 9px "JetBrains Mono", monospace; }
+  .boundaries-grid header h3 { flex: 1; margin: 0; font-size: 13px; font-weight: 500; }
+  .boundaries-grid header b { color: #85858a; font-size: 14px; font-weight: 400; }
+  .boundaries-grid p { margin: 8px 0 21px; color: #929297; font-size: 11px; line-height: 1.65; }
+
+  @media (max-width: 760px) {
+    .ethics-shell { width: min(100% - 28px, 620px); padding-top: 32px; }
+    .ethics-hero, .ethics-section-heading { align-items: flex-start; flex-direction: column; }
+    .ethics-hero h1 { font-size: 58px; }
+    .ethics-hero h2 { font-size: 29px; }
+    .ethics-hero-action { width: 100%; text-align: left; }
+    .ethics-hero-action span { display: inline-block; }
+    .ethics-principles, .scenario-layout, .privacy-layout, .boundaries-grid { grid-template-columns: 1fr; }
+    .ethics-principles article { border-right: 0; border-bottom: 1px solid #252528; }
+    .ethics-principles article:not(:first-child) { padding-left: 0; }
+    .ethics-principles article:last-child { border-bottom: 0; }
+    .scenario-layout { gap: 28px; }
+    .ethics-outline-label { align-self: flex-start; }
+    .privacy-layout { gap: 35px; }
+    .boundaries-grid article:nth-child(n+3) { padding-top: 0; }
+    .boundaries-grid article { padding-top: 23px !important; }
+  }
+
   @media (min-width: 621px) and (max-width: 900px) {
     .methodology-navbar {
       padding: 0 24px;

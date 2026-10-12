@@ -113,7 +113,7 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
     ];
     const about = [
         { label: "Methodology", icon: "methodology", href: "/methodology" },
-        { label: "Ethics & Limits", icon: "ethics", href: "#ethics" },
+        { label: "Ethics & Limits", icon: "ethics", href: "/ethics" },
     ];
     async function confirmLogout(allDevices: boolean) {
         setSigningOut(true);

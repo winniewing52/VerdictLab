@@ -1,0 +1,118 @@
+{
+  "eyebrow": "Responsible by design",
+  "title": ["Ethics & Limits", "Insight. Not absolute truth."],
+  "intro": "Behind every comment is a person. VerdictLab helps explore public conversations—not judge individuals, diagnose emotions, or speak for everyone.",
+  "heroAction": {
+    "label": "Explore responsible use",
+    "caption": "People first. Evidence always."
+  },
+  "principles": [
+    { "icon": "◉", "title": "Protect privacy", "description": "Public does not mean risk-free." },
+    { "icon": "⊙", "title": "Show uncertainty", "description": "Agreement is not a guarantee." },
+    { "icon": "◎", "title": "Respect context", "description": "A sample is not the whole public." },
+    { "icon": "♧", "title": "Keep people involved", "description": "Human review stays essential." }
+  ],
+  "responsibleUse": {
+    "eyebrow": "01 / Responsible use",
+    "title": "Useful for exploration. Not every decision.",
+    "label": "Illustrative scenarios",
+    "scenarios": [
+      {
+        "number": "01",
+        "title": "Explore product feedback",
+        "status": "Suitable with care",
+        "statusTone": "safe",
+        "description": "Compare themes in public feedback to identify questions worth investigating.",
+        "boundary": "The sample describes the collected conversation—not all customers. Read original comments before drawing conclusions.",
+        "nextStep": "Report the source, collection window, sample size, and model limitations alongside the findings."
+      },
+      {
+        "number": "02",
+        "title": "Analyse mixed languages",
+        "status": "Needs separate validation",
+        "statusTone": "safe",
+        "description": "Explore English, Malay, slang, or code-switching in a conversation.",
+        "boundary": "English-oriented tools may miss local meaning. Similar model scores do not establish multilingual accuracy.",
+        "nextStep": "Review examples with people who understand the language and validate performance on a relevant labelled dataset."
+      },
+      {
+        "number": "03",
+        "title": "Judge a person",
+        "status": "Not an appropriate use",
+        "statusTone": "danger",
+        "description": "Use sentiment to decide whether someone deserves a job, access to services, or a mental-health diagnosis.",
+        "boundary": "Sentiment scores do not measure character, suitability, or mental health. Do not use them for high-stakes decisions about individuals.",
+        "nextStep": "Use an appropriate human-led, accountable process instead. Do not turn exploratory scores into personal labels."
+      },
+      {
+        "number": "04",
+        "title": "Claim public consensus",
+        "status": "Unsupported conclusion",
+        "statusTone": "danger",
+        "description": "Treat a positive conversation on one platform as proof that everyone supports a policy.",
+        "boundary": "Online samples have platform and participation bias. A collected conversation is not a representative public-opinion survey.",
+        "nextStep": "Describe only the observed sample. Use representative research before making population-wide claims."
+      }
+    ]
+  },
+  "privacy": {
+    "eyebrow": "02 / Privacy in practice",
+    "title": "Remove identifiers. Keep your judgment.",
+    "sideNote": "Automatic redaction reduces exposure.\nIt cannot guarantee anonymity.",
+    "subheading": "Less personal data. Less avoidable risk.",
+    "description": "The reference pipeline redacts supported email, phone, and handle patterns and replaces URLs. Names, locations, and indirect identifying details can still remain.",
+    "guidance": [
+      "Check source permissions and platform requirements.",
+      "Do not upload sensitive or private conversations.",
+      "Review text before sharing examples or results."
+    ],
+    "recordLabel": "Example record",
+    "original": "“I’m Maya, the only librarian in Pinebridge. Contact maya@example.com or @maya_demo. The update keeps crashing.”",
+    "redacted": "“I’m Maya, the only librarian in Pinebridge. Contact [email] or [handle]. The update keeps crashing.”",
+    "warning": "The name and unique role still identify someone. Removing an email and handle is not enough.",
+    "footnote": "Synthetic example · Not a live redaction tool"
+  },
+  "boundaries": {
+    "eyebrow": "03 / Know the boundaries",
+    "title": "What the result cannot promise.",
+    "sideNote": "Limits belong alongside the findings.\nNot hidden in the small print.",
+    "items": [
+      {
+        "number": "01",
+        "title": "Sarcasm & context",
+        "why": "Positive words can express negative intent. All three models can agree and still be wrong.",
+        "action": "Read the original comment and surrounding conversation. Treat disagreement as a reason to investigate, not a correction."
+      },
+      {
+        "number": "02",
+        "title": "Language & cultural bias",
+        "why": "English-oriented tools can misread Malay, code-switching, slang, and community-specific expressions.",
+        "action": "Validate on relevant language samples and include reviewers who understand the community."
+      },
+      {
+        "number": "03",
+        "title": "Sampling & representation",
+        "why": "Platform choice, collection dates, missing records, and who chooses to post all shape the result.",
+        "action": "Describe the collected sample and its gaps. Do not extrapolate to the entire public."
+      },
+      {
+        "number": "04",
+        "title": "Confidence & emotion",
+        "why": "Confidence labels are heuristic, not calibrated probabilities. Emotion dimensions are exploratory, not diagnoses.",
+        "action": "Report sample size and model agreement separately. Do not interpret an emotion score as fact about a person."
+      },
+      {
+        "number": "05",
+        "title": "Privacy & redaction",
+        "why": "Supported patterns can be redacted, but names, locations, and indirect identifiers may remain.",
+        "action": "Avoid sensitive uploads and review text manually. Publicly visible does not mean risk-free or unrestricted to reuse."
+      },
+      {
+        "number": "06",
+        "title": "Validation & accuracy",
+        "why": "The reference project includes sentiment evaluation: this preview claims no measured benchmark result.",
+        "action": "Use measured results from relevant data before claiming performance. A sentiment benchmark does not validate emotion dimensions."
+      }
+    ]
+  }
+}
