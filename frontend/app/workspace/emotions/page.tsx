@@ -103,7 +103,7 @@ function EmotionsInner() {
             <section className="panel" data-tour="emotions-radar" style={PANEL_COLUMN}>
               <div className="panel-heading">
                 <div>
-                  <h2>Hourglass radar</h2>
+                  <h2>Which emotions dominate each conflict?</h2>
                   <p>{conflictShares.length ? "Share of each conflict's comments per dimension" : "Share of all comments per dimension"}</p>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
@@ -135,7 +135,7 @@ function EmotionsInner() {
             <section className="panel" data-tour="emotions-stream" style={PANEL_COLUMN}>
               <div className="panel-heading">
                 <div>
-                  <h2>Emotion stream</h2>
+                  <h2>When did the emotional mix shift?</h2>
                   <p>{streamData.length ? `Stacked area over time — ${scaleLabels.per} share of comments per dimension${scale.kind === "time" ? ` · ${scale.date}, by time of day` : ""}` : "No dated comments, so no stream can be drawn"}</p>
                 </div>
                 <InfoTip title={INFO.stream.title}>{INFO.stream.body}</InfoTip>
@@ -161,7 +161,7 @@ function EmotionsInner() {
           <section className="panel" data-tour="emotions-cloud" style={{ marginTop: 9 }}>
             <div className="panel-heading">
               <div>
-                <h2>Concept word cloud</h2>
+                <h2>What are people talking about?</h2>
                 <p>Most frequent words in your comments, sized by number of comments using them, coloured by their dominant emotion</p>
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>

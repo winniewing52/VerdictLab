@@ -481,7 +481,7 @@ def _build_report(analysis: Analysis, summary: dict, topics: list[str]) -> str:
     return f"""# {analysis.title}
 
 **Source:** {analysis.source_type} - {analysis.source_url or "uploaded file"}
-**Run:** {analysis.id}
+**Analysis reference:** {analysis.id}
 **Records collected:** {summary['total_records']} -> **{summary['records_after_dedup']}** after cleaning/dedup ({summary['dedup_rate_pct']}% removed)
 **Model quality:** not reported without an independently labelled evaluation set.
 **Privacy mode:** {summary['privacy']['mode']} ({summary['privacy']['note']})

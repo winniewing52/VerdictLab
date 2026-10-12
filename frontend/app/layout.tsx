@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-    title: "VerdictLab — ",
-    description: "Decode the ground truth in Reddit, YouTube, and research datasets.",
+    title: "VerdictLab — Evidence before certainty",
+    description: "Turn public conversations into explainable signals you can trace back to evidence.",
 };
 export const viewport: Viewport = {
     width: "device-width",

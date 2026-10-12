@@ -106,9 +106,7 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
         { label: "Explorer", icon: "explorer", href: link("explorer") },
     ];
     const research = [
-        { label: "Event Impact", icon: "impact", href: "#impact" },
-        { label: "Model Agreement", icon: "agreement", href: "#agreement" },
-        { label: "Echo Chamber", icon: "echo", href: "#echo" },
+        { label: "Validation", icon: "agreement", href: link("validation") },
         { label: "Live Analyser", icon: "live", href: link("live") },
     ];
     const about = [
@@ -138,7 +136,7 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
     <aside className={`dashboard-sidebar${open ? " is-open" : " is-closed"}${hydrated ? " is-hydrated" : ""}`} aria-label="VerdictLab navigation">
       <div className="brand-lockup">
         <div className="brand-mark">VL</div>
-        <div><strong>VerdictLab</strong><span>MDS05 · SENTICNET 7</span></div>
+        <div><strong>VerdictLab</strong><span>MDS05 · SENTICNET 9</span></div>
         <button className="sidebar-close-button" type="button" onClick={() => setOpen(false)} aria-label="Close navigation">×</button>
       </div>
       <nav>
@@ -165,7 +163,7 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
         </div>)}
       <div className="sidebar-footer">
         {email && <span className="sidebar-status"><i className="status-dot"/>{email}</span>}
-        v0.9 · build mds05<br />Monash EET3163/EET3164
+        v1.0 · MDS05<br />Monash EET3163/EET3164
       </div>
     </aside>
     {open && hydrated && <button className="sidebar-backdrop" type="button" onClick={() => setOpen(false)} aria-label="Close navigation"/>}

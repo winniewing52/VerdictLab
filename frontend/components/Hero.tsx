@@ -10,8 +10,9 @@ export default function Hero() {
     const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
     useEffect(() => {
-        getDemoSample().then(setSample).catch(() => {
-        });
+        getDemoSample()
+            .then(setSample)
+            .catch(() => setError("The sample analysis is temporarily unavailable. Open the workspace once the analysis server is running."));
     }, []);
     const community = sample?.source_url?.match(/reddit\.com\/r\/([^/]+)/i)?.[1];
     const sourceLabel = community

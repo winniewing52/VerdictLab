@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Analysis, User
-from .auth import get_optional_user
+from .auth import get_current_user, get_optional_user
 from ..services.pipeline import run_pipeline
 from ..services import sentic
 
@@ -124,11 +124,9 @@ def create_analysis(
 @router.get("")
 def list_analyses(
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    current: tuple = Depends(get_current_user),
 ):
-
-    if user is None:
-        return []
+    user, _, _ = current
     rows = (
         db.query(Analysis)
         .filter(Analysis.user_id == user.id, Analysis.is_demo == 0)
@@ -151,8 +149,9 @@ def list_analyses(
 def get_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    current: tuple = Depends(get_current_user),
 ):
+    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     return _serialize(a)
 
@@ -160,8 +159,9 @@ def get_analysis(
 def get_results(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    current: tuple = Depends(get_current_user),
 ):
+    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     records = []
     for record in a.result_records or []:
@@ -185,8 +185,9 @@ def get_results(
 def get_report(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    current: tuple = Depends(get_current_user),
 ):
+    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     if a.status != "complete":
         raise HTTPException(409, f"Analysis is not complete yet (status: {a.status})")
@@ -196,8 +197,9 @@ def get_report(
 def delete_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    current: tuple = Depends(get_current_user),
 ):
+    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     if a.is_demo:
         raise HTTPException(403, "The public sample analysis cannot be deleted.")

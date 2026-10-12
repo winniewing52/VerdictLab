@@ -251,7 +251,7 @@ function draw(ctx: CanvasRenderingContext2D, v: Verdict) {
     spacing(ctx, 1);
     ctx.fillStyle = C.dim;
     ctx.textAlign = "left";
-    ctx.fillText(`RUN ${v.runId}  ·  VADER + TEXTBLOB CROSS-CHECKED`, 60, 614);
+    ctx.fillText(`ANALYSIS REF ${v.runId}  ·  VADER + TEXTBLOB CROSS-CHECKED`, 60, 614);
     ctx.textAlign = "right";
     ctx.fillStyle = v.agreement.agree ? C.muted : C.amber;
     ctx.fillText(`CONFIDENCE ${v.confidence.toUpperCase()}  ·  ${v.agreement.agree ? "MODELS AGREE" : "MODELS DISAGREE"}`, 1140, 614);

@@ -43,7 +43,7 @@ export default function PipelineCard({ analysisId }: {
         <p className="font-mono text-xs text-muted uppercase tracking-wide">
           Pipeline · {analysis.title}
         </p>
-        <p className="font-mono text-xs text-muted">Run #{analysis.id}</p>
+        <p className="font-mono text-xs text-muted">Analysis reference · {analysis.id}</p>
       </div>
 
       <div className="space-y-5">
@@ -72,9 +72,13 @@ export default function PipelineCard({ analysisId }: {
           <p className="font-mono text-xs text-muted mt-1">Records in</p>
         </div>
         <div>
-          <p className="text-sm font-semibold text-alert">Not reported</p>
-          <p className="font-mono text-xs text-muted mt-1">Model quality</p>
+          <p className="text-sm font-semibold text-alert">Accuracy not checked</p>
+          <p className="font-mono text-xs text-muted mt-1">No human answers to compare</p>
         </div>
       </div>
+      <p className="mt-4 text-xs leading-5 text-muted">
+        Your file can be analysed, but accuracy can only be checked when each
+        record has a human-labelled answer.
+      </p>
     </div>);
 }

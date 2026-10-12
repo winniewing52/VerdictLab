@@ -166,7 +166,7 @@ export function verdictSummaryText(v: Verdict): string {
         `Confidence: ${v.confidence} (${v.agreement.agree ? "models agree" : "models disagree"})`,
         "",
         `${v.source}${v.dateRange ? ` · ${v.dateRange}` : ""}`,
-        `Run ${v.runId} · ${v.generatedOn}`,
+        `Analysis reference ${v.runId} · ${v.generatedOn}`,
     ];
     return lines.join("\n");
 }

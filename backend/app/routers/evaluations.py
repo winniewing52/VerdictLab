@@ -1,5 +1,8 @@
 from typing import Optional
 
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from ..models import User
@@ -7,6 +10,18 @@ from .auth import get_optional_user
 from ..services.evaluation import evaluate_csv
 
 router = APIRouter(prefix="/evaluations", tags=["evaluations"])
+BENCHMARK_PATH = Path(__file__).resolve().parents[2] / "benchmarks" / "tweeteval_sentiment_test.json"
+
+
+@router.get("/benchmark")
+def get_benchmark():
+    """Return the committed, reproducible benchmark used by the demo."""
+    if not BENCHMARK_PATH.exists():
+        raise HTTPException(503, "The reproducible benchmark has not been generated yet.")
+    try:
+        return json.loads(BENCHMARK_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(503, "The reproducible benchmark could not be loaded.") from exc
 
 
 @router.post("/sentiment")

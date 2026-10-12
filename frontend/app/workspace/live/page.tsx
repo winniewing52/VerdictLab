@@ -180,7 +180,7 @@ function LiveInner() {
             <section className="panel" style={PANEL_COLUMN}>
               <div className="panel-heading">
                 <div>
-                  <h2>Score</h2>
+                  <h2>Why did this sentence receive this verdict?</h2>
                   <p>SenticNet 9 + exploratory Hourglass + baselines{loading ? " · scoring…" : ""}</p>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>

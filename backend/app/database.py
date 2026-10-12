@@ -9,12 +9,25 @@ Why SQLite:
   e.g. once you run multiple worker processes and need real concurrency.
 """
 import os
+import shutil
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./verdictlab.db")
+DEFAULT_DATABASE_PATH = Path(__file__).resolve().parents[1] / "verdictlab.db"
+if "DATABASE_URL" not in os.environ:
+    legacy_database_path = Path.cwd() / "verdictlab.db"
+    if (
+        legacy_database_path != DEFAULT_DATABASE_PATH
+        and legacy_database_path.is_file()
+        and not DEFAULT_DATABASE_PATH.exists()
+    ):
+        DEFAULT_DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(legacy_database_path, DEFAULT_DATABASE_PATH)
+
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH}")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)

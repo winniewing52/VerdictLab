@@ -201,6 +201,44 @@ export async function getDemoSample(): Promise<Analysis> {
         throw new AccountError(await res.text(), res.status);
     return res.json();
 }
+export type BenchmarkResult = {
+    dataset: {
+        name: string;
+        records: number;
+    };
+    models: Record<string, {
+        accuracy: number;
+        macro_f1: number;
+        confidence_intervals_95: Record<string, [number, number]>;
+    }>;
+    run?: {
+        completed_at_utc?: string;
+        is_full_split?: boolean;
+        rows_scored?: number;
+    };
+};
+export async function getBenchmark(): Promise<BenchmarkResult> {
+    const res = await fetch(`${API_BASE}/evaluations/benchmark`, { cache: "no-store" });
+    if (!res.ok)
+        throw new Error(await res.text());
+    return res.json();
+}
+export async function evaluateSentiment(params: {
+    file: File;
+    datasetName: string;
+}): Promise<BenchmarkResult> {
+    const form = new FormData();
+    form.append("file", params.file);
+    form.append("dataset_name", params.datasetName);
+    const res = await fetch(`${API_BASE}/evaluations/sentiment`, {
+        method: "POST",
+        body: form,
+        headers: authHeader(),
+    });
+    if (!res.ok)
+        throw new Error(await res.text());
+    return res.json();
+}
 export async function getResults(id: string): Promise<AnalysisResults> {
     const res = await fetch(`${API_BASE}/analyses/${id}/results`, { cache: "no-store", headers: authHeader() });
     if (!res.ok)

@@ -140,7 +140,7 @@ function ExplorerInner() {
   title        = {Scored corpus (${filtered.length.toLocaleString()} of ${records.length.toLocaleString()} ${allNouns.plural}${span})},
   author       = {{Group MDS05}},
   year         = {${year}},
-  howpublished = {VerdictLab (SenticNet 7 analysis run ${runId ?? "n/a"})},
+  howpublished = {VerdictLab (SenticNet 9 analysis run ${runId ?? "n/a"})},
   note         = {Accessed ${new Date().toISOString().slice(0, 10)}}
 }
 `;

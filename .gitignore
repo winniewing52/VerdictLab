@@ -1,0 +1,7 @@
+# Local development environments and generated output
+backend/.venv/
+backend/verdictlab.db
+frontend/node_modules/
+frontend/.next/
+backend.zip
+frontend.zip

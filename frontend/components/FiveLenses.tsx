@@ -45,16 +45,14 @@ function EmotionsPreview({ on }: {
     on: boolean;
 }) {
     const bars = [
-        { n: "Joy", v: 24, c: "#5bbf8a" },
-        { n: "Exc", v: 19, c: "#f2b73a" },
-        { n: "Cur", v: 15, c: "#7d9fb7" },
-        { n: "Dbt", v: 14, c: "#cf6e43" },
-        { n: "Frs", v: 11, c: "#e0524a" },
-        { n: "Ang", v: 6, c: "#b83a3a" },
+        { n: "Pleas.", label: "Pleasantness", v: 24, c: "#5bbf8a" },
+        { n: "Attn.", label: "Attention", v: 19, c: "#f2b73a" },
+        { n: "Sens.", label: "Sensitivity", v: 15, c: "#e0524a" },
+        { n: "Apt.", label: "Aptitude", v: 11, c: "#7d9fb7" },
     ];
     return (<div className="flex h-10 items-end gap-2">
       {bars.map((b) => (<div key={b.n} className="flex flex-1 flex-col items-center gap-1">
-          <div className="w-full rounded-[2px] transition-all duration-1000 ease-out" style={{ height: on ? `${(b.v / 24) * 28}px` : "2px", background: b.c }}/>
+          <div title={b.label} aria-label={`${b.label}: ${b.v}%`} className="w-full rounded-[2px] transition-all duration-1000 ease-out" style={{ height: on ? `${(b.v / 24) * 28}px` : "2px", background: b.c }}/>
           <span className="font-mono text-[9px] text-muted">{b.n}</span>
         </div>))}
     </div>);
@@ -130,7 +128,7 @@ const LENSES: Lens[] = [
 ];
 const EVIDENCE_POINTS = [
     "Every score links back to the original post or comment",
-    "VADER, TextBlob and SenticNet 7 are shown side by side",
+    "VADER, TextBlob and SenticNet 9 are shown side by side",
     "Disagreements between models are flagged, not hidden",
 ];
 export default function FiveLenses() {
@@ -165,12 +163,12 @@ export default function FiveLenses() {
             </h2>
           </div>
           <p className="font-mono text-[11px] sm:text-xs uppercase tracking-[0.12em] text-muted">
-            Explainable · SenticNet 7
+            Explainable · SenticNet 9
           </p>
         </div>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {LENSES.map((lens, i) => (<Link key={lens.num} href={`/demo?tab=${lens.tab}`} className="group flex flex-col rounded-lg border border-line bg-panel p-6 sm:p-7 transition duration-300 hover:-translate-y-1 hover:border-signal/60 hover:bg-[#151518] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal" style={{
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          {LENSES.map((lens, i) => (<Link key={lens.num} href={`/demo?tab=${lens.tab}`} className={`group flex flex-col rounded-lg border border-line bg-panel p-6 sm:p-7 transition duration-300 hover:-translate-y-1 hover:border-signal/60 hover:bg-[#151518] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal ${i < 3 ? "lg:col-span-2" : "lg:col-span-3"}`} style={{
                 opacity: on ? 1 : 0,
                 transform: on ? undefined : "translateY(14px)",
                 transitionProperty: "opacity, transform, border-color, background-color",
@@ -190,28 +188,31 @@ export default function FiveLenses() {
               </span>
             </Link>))}
 
-          <div className="flex flex-col rounded-lg border border-signal/30 bg-signal/[0.04] p-6 sm:p-7 transition-all duration-300 hover:border-signal/60" style={{
+        </div>
+
+        <div className="mt-4 flex flex-col rounded-lg border border-signal/30 bg-signal/[0.04] p-6 sm:p-7 transition-all duration-300 hover:border-signal/60 sm:flex-row sm:items-start sm:justify-between sm:gap-10" style={{
             opacity: on ? 1 : 0,
             transform: on ? undefined : "translateY(14px)",
             transitionDelay: on ? `${LENSES.length * 90}ms` : "0ms",
         }}>
-            <span className="font-mono text-xs uppercase tracking-wide text-signal">Grounded</span>
-            <h3 className="mt-5 font-serif text-2xl text-[#EDEDEF]">Evidence &amp; explainability</h3>
-            <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              Trace the reading to source records instead of relying on a score alone.
-            </p>
-
-            <ul className="mt-5 space-y-2">
-              {EVIDENCE_POINTS.map((point) => (<li key={point} className="flex gap-2 text-[13px] leading-snug text-muted">
-                  <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-signal"/>
-                  {point}
-                </li>))}
-            </ul>
-
-            <Link href="/demo?tab=Explore" className="mt-6 inline-flex items-center gap-2 font-mono text-sm text-signal hover:brightness-110">
-              See the evidence trail <span>↗</span>
-            </Link>
-          </div>
+            <div className="sm:max-w-md">
+              <span className="font-mono text-xs uppercase tracking-wide text-signal">Grounded</span>
+              <h3 className="mt-5 font-serif text-2xl text-[#EDEDEF]">Evidence &amp; explainability</h3>
+              <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                Trace the reading to source records instead of relying on a score alone.
+              </p>
+            </div>
+            <div className="sm:flex-1">
+              <ul className="mt-5 space-y-2 sm:mt-0">
+                {EVIDENCE_POINTS.map((point) => (<li key={point} className="flex gap-2 text-[13px] leading-snug text-muted">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-signal"/>
+                    {point}
+                  </li>))}
+              </ul>
+              <Link href="/demo?tab=Explore" className="mt-6 inline-flex shrink-0 items-center gap-2 font-mono text-sm text-signal hover:brightness-110">
+                See the evidence trail <span>↗</span>
+              </Link>
+            </div>
         </div>
 
         <div className="mt-10 flex flex-col gap-5 rounded-lg border border-line bg-panel/40 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">

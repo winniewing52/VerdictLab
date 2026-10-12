@@ -122,7 +122,7 @@ function Sheet({ v }: {
 
         <section className="rp-cols">
           <div className="rp-card">
-            <h2>Sentiment distribution</h2>
+            <h2>How is the conversation split by tone?</h2>
             <p className="rp-sub">Share of unique comments, full dataset</p>
             <div className="rp-stack" role="img" aria-label="Sentiment split">
               {sentiments.map((s) => <i key={s.name} style={{ width: `${s.value}%`, background: s.color }}/>)}
@@ -141,7 +141,7 @@ function Sheet({ v }: {
           </div>
 
           <div className="rp-card">
-            <h2>Polarity over time</h2>
+            <h2>When did public opinion change?</h2>
             <p className="rp-sub">3-period rolling mean · below zero = negative</p>
             <TrendChart points={v.trend} color={tone}/>
             <p className="rp-sub rp-tight">
@@ -152,7 +152,7 @@ function Sheet({ v }: {
 
         <section className="rp-cols">
           <div className="rp-card">
-            <h2>Hourglass of Emotions</h2>
+            <h2>What emotions are driving the discussion?</h2>
             <p className="rp-sub">Exploratory Hourglass dimension per comment · not human-validated</p>
             <div className="rp-emo">
               {DIMENSION_KEYS.map((key) => (<div key={key}>
@@ -164,7 +164,7 @@ function Sheet({ v }: {
           </div>
 
           <div className="rp-card">
-            <h2>What people are talking about</h2>
+            <h2>What topics are people discussing?</h2>
             <p className="rp-sub">Most frequent discussion topics</p>
             {v.topics.length ? (<div className="rp-chips">{v.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>) : (<p className="rp-empty">Not enough signal to extract topics.</p>)}
           </div>

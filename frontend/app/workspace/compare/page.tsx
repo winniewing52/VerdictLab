@@ -151,7 +151,7 @@ function CompareInner() {
             <section className="panel" data-tour="compare-polarity" style={PANEL_COLUMN}>
               <div className="panel-heading">
                 <div>
-                  <h2>Diverging polarity by subreddit</h2>
+                  <h2>Which communities lean positive or negative?</h2>
                   <p>Mean polarity, −1 to +1</p>
                 </div>
                 <InfoTip title={INFO.polarity.title}>{INFO.polarity.body}</InfoTip>
@@ -167,7 +167,7 @@ function CompareInner() {
             <section className="panel" data-tour="compare-sensitivity" style={PANEL_COLUMN}>
               <div className="panel-heading">
                 <div>
-                  <h2>Mean sensitivity by subreddit</h2>
+                  <h2>Which communities sound most emotionally charged?</h2>
                   <p>Share of each community's comments dominated by Sensitivity (anger / fear)</p>
                 </div>
                 <InfoTip title={INFO.sensitivity.title}>{INFO.sensitivity.body}</InfoTip>
@@ -184,7 +184,7 @@ function CompareInner() {
           <section className="panel" data-tour="compare-conflicts" style={{ marginTop: 9 }}>
             <div className="panel-heading">
               <div>
-                <h2>Conflict head-to-head</h2>
+                <h2>Which topics create the most disagreement?</h2>
                 <p>{conflictStats.length ? `${conflictStats.map((stat) => stat.name).join(" vs ")} — share of comments per Hourglass dimension` : "Select a conflict to compare"}</p>
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
@@ -230,7 +230,7 @@ function CompareInner() {
           <section className="panel" data-tour="compare-fingerprint" style={{ marginTop: 9 }}>
             <div className="panel-heading">
               <div>
-                <h2>Subreddit personality fingerprint</h2>
+                <h2>What is each community&rsquo;s emotional signature?</h2>
                 <p>Share of each community's comments per Hourglass dimension</p>
               </div>
               <InfoTip title={INFO.fingerprint.title}>{INFO.fingerprint.body}</InfoTip>
