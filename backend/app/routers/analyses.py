@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
+import threading
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -71,7 +73,6 @@ def get_demo_sample(db: Session = Depends(get_db)):
 
 @router.post("")
 def create_analysis(
-    background_tasks: BackgroundTasks,
     source_type: str = Form(...),
     source_url: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
@@ -117,7 +118,12 @@ def create_analysis(
     db.refresh(analysis)
 
     file_bytes = file.file.read() if file else None
-    background_tasks.add_task(run_pipeline, analysis.id, file_bytes, file.filename if file else None)
+    # Do not keep the HTTP request open while the hosted instance processes the file.
+    threading.Thread(
+        target=run_pipeline,
+        args=(analysis.id, file_bytes, file.filename if file else None),
+        daemon=True,
+    ).start()
 
     return _serialize(analysis)
 
