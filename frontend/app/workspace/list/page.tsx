@@ -119,7 +119,7 @@ export default function WorkspaceListPage() {
             router.push("/workspace/access");
         }
     }
-    return (<div className="min-h-screen bg-ink text-foreground">
+    return (<div className="workspace-list-page min-h-screen bg-ink text-foreground">
       <header className="flex items-center justify-between border-b border-line px-6 py-5 md:px-10">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-signal font-bold text-ink">V</div>

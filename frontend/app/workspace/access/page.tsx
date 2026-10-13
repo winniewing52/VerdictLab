@@ -146,7 +146,7 @@ function WorkspaceAccessInner() {
             setSubmitting(false);
         }
     }
-    return (<main className="min-h-screen bg-ink px-6 py-10 text-foreground md:px-12 lg:px-20">
+    return (<main className="access-page min-h-screen bg-ink px-6 py-10 text-foreground md:px-12 lg:px-20">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl flex-col">
         <button type="button" onClick={() => router.push("/")} className="self-end font-mono text-xs uppercase tracking-wider text-muted transition hover:text-white">
           <span className="mr-2 text-base">←</span> Back to overview

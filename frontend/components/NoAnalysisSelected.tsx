@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 export default function NoAnalysisSelected() {
-    return (<div className="flex min-h-[420px] items-center justify-center px-6 py-16">
-      <div className="max-w-xl text-center">
+    return (<div className="empty-analysis-state flex min-h-[420px] items-center justify-center px-6 py-16">
+      <div className="empty-analysis-card max-w-xl text-center">
         <p className="font-mono text-xs uppercase tracking-[0.18em] text-signal">Workspace</p>
         <h1 className="mt-4 text-3xl font-bold text-white">No analysis selected</h1>
         <p className="mt-4 text-sm leading-7 text-muted">
