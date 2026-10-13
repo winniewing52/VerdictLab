@@ -41,7 +41,7 @@ if not sentic.available():
 print("SenticNet OK")
 PY
 
-"$PYTHON" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
+"$PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
 for attempt in {1..30}; do
@@ -63,4 +63,4 @@ echo "Backend ready at http://127.0.0.1:8000"
 echo "== Frontend =="
 cd "$ROOT_DIR/frontend"
 [ -d node_modules ] || npm install
-npm run dev
+npm run dev -- --hostname 0.0.0.0

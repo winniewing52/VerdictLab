@@ -16,6 +16,7 @@ import { countKinds, kindOf, recordNouns } from "@/lib/recordKind";
 import PostsVsComments from "@/components/PostsVsComments";
 import { isDemoPath } from "@/lib/demo";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
+import ShareDashboard from "@/components/ShareDashboard";
 function WorkspaceInner() {
     const router = useRouter();
     const { runId, resolving, error: resolveError, retry } = useActiveRun();
@@ -97,10 +98,13 @@ function WorkspaceInner() {
               <h1>Know what changed. Know what to check next.</h1>
               <p className="dashboard-subtitle">VerdictLab helps researchers, journalists, policy teams, and moderators decide what deserves human attention in a public conversation—not just whether the tone is positive or negative.</p>
             </div>
-            {runId && (<div className="page-head-actions">
+            <div className="page-head-actions">
+                <ShareDashboard />
+                {runId && (<>
                 {analysis?.status === "complete" && results?.result_summary && <ExportMenu analysis={analysis} results={results}/>}
                 <button type="button" onClick={handleDelete} disabled={deleting} className="pulse-delete font-mono text-xs uppercase tracking-wider text-muted hover:text-alert">{deleting ? "Deleting…" : "Delete analysis"}</button>
-              </div>)}
+                </>)}
+            </div>
           </div>
           {resolving ? (<PulseIdle><div className="timeline-chart-empty">Loading your analysis…</div></PulseIdle>) : !runId && resolveError ? (<PulseIdle>
               <div className="timeline-chart-empty">
@@ -167,8 +171,19 @@ function DashboardResults({ analysis, results, report }: {
     const truncated = summary.records_after_dedup > records.length;
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
+    const [guidanceOpen, setGuidanceOpen] = useState(false);
     return <>
-    <DashboardGuide summary={summary} recordCount={filtered.length}/>
+    <section className="signal-check" aria-label="Signal check">
+      <div>
+        <label>SIGNAL CHECK</label>
+        <strong>{dominant[0].toUpperCase() + dominant.slice(1)} tone leads in this slice.</strong>
+        <p>Verify the supporting comments before making a public-facing decision.</p>
+      </div>
+      <button type="button" className="signal-check-link" aria-expanded={guidanceOpen} onClick={() => setGuidanceOpen((open) => !open)}>
+        {guidanceOpen ? "Hide dashboard guidance ↑" : "How to interpret this dashboard →"}
+      </button>
+    </section>
+    {guidanceOpen && <DashboardGuide summary={summary} recordCount={filtered.length}/>}
     <div className="pulse-toolbar">
       <button type="button" className="tour-trigger" onClick={() => setTourOpen(true)}>▶ TAKE THE 60-SECOND TOUR</button>
       <button type="button" className="glossary-trigger" onClick={() => setGlossaryOpen(true)}>📖 GLOSSARY</button>
