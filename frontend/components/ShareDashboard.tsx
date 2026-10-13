@@ -12,13 +12,11 @@ export default function ShareDashboard() {
     useEffect(() => {
         if (!open)
             return;
-        const configuredOrigin = process.env.NEXT_PUBLIC_SHARE_ORIGIN?.replace(/\/$/, "");
-        const browserOrigin = window.location.origin;
-        const origin = configuredOrigin || (
-            window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-                ? `${window.location.protocol}//${window.location.hostname}:3000`
-                : browserOrigin
-        );
+        const configuredHost = process.env.NEXT_PUBLIC_SHARE_HOST?.replace(/\/$/, "");
+        const browserUrl = new URL(window.location.href);
+        const origin = configuredHost
+            ? `${configuredHost}${browserUrl.port ? `:${browserUrl.port}` : ""}`
+            : browserUrl.origin;
         setUrl(`${origin}/`);
         setFeedback(null);
         const onKey = (event: KeyboardEvent) => {

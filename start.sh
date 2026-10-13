@@ -70,8 +70,8 @@ if [[ -z "${NEXT_PUBLIC_SHARE_ORIGIN:-}" ]]; then
     LAN_IP="$(ipconfig getifaddr en1 2>/dev/null || true)"
   fi
   if [[ -n "$LAN_IP" ]]; then
-    export NEXT_PUBLIC_SHARE_ORIGIN="http://${LAN_IP}:3000"
-    echo "Mobile dashboard URL: ${NEXT_PUBLIC_SHARE_ORIGIN}"
+    export NEXT_PUBLIC_SHARE_HOST="http://${LAN_IP}"
+    echo "Mobile dashboard host: ${NEXT_PUBLIC_SHARE_HOST} (the QR code will use the active frontend port)"
   else
     echo "WARNING: Could not detect a LAN IP. QR codes may only work on this computer." >&2
   fi
