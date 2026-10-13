@@ -12,7 +12,14 @@ export default function ShareDashboard() {
     useEffect(() => {
         if (!open)
             return;
-        setUrl(`${window.location.origin}/`);
+        const configuredOrigin = process.env.NEXT_PUBLIC_SHARE_ORIGIN?.replace(/\/$/, "");
+        const browserOrigin = window.location.origin;
+        const origin = configuredOrigin || (
+            window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+                ? `${window.location.protocol}//${window.location.hostname}:3000`
+                : browserOrigin
+        );
+        setUrl(`${origin}/`);
         setFeedback(null);
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape")

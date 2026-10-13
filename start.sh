@@ -63,4 +63,18 @@ echo "Backend ready at http://127.0.0.1:8000"
 echo "== Frontend =="
 cd "$ROOT_DIR/frontend"
 [ -d node_modules ] || npm install
+
+if [[ -z "${NEXT_PUBLIC_SHARE_ORIGIN:-}" ]]; then
+  LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  if [[ -z "$LAN_IP" ]]; then
+    LAN_IP="$(ipconfig getifaddr en1 2>/dev/null || true)"
+  fi
+  if [[ -n "$LAN_IP" ]]; then
+    export NEXT_PUBLIC_SHARE_ORIGIN="http://${LAN_IP}:3000"
+    echo "Mobile dashboard URL: ${NEXT_PUBLIC_SHARE_ORIGIN}"
+  else
+    echo "WARNING: Could not detect a LAN IP. QR codes may only work on this computer." >&2
+  fi
+fi
+
 npm run dev -- --hostname 0.0.0.0
