@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Area, AreaChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import PipelineCard from "@/components/PipelineCard";
 import DashboardSidebar from "@/components/DashboardSidebar";
@@ -20,6 +20,7 @@ import ShareDashboard from "@/components/ShareDashboard";
 import SampleNotice from "@/components/SampleNotice";
 function WorkspaceInner() {
     const router = useRouter();
+    const pathname = usePathname();
     const { runId, resolving, error: resolveError, retry } = useActiveRun();
     const [deleting, setDeleting] = useState(false);
     const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -110,7 +111,7 @@ function WorkspaceInner() {
                 <ShareDashboard />
                 {runId && (<>
                 {analysis?.status === "complete" && results?.result_summary && <ExportMenu analysis={analysis} results={results}/>}
-                <button type="button" onClick={handleDelete} disabled={deleting} className="pulse-delete font-mono text-xs uppercase tracking-wider text-muted hover:text-alert">{deleting ? "Deleting…" : "Delete analysis"}</button>
+                {!isDemoPath(pathname) && <button type="button" onClick={handleDelete} disabled={deleting} className="pulse-delete font-mono text-xs uppercase tracking-wider text-muted hover:text-alert">{deleting ? "Deleting…" : "Delete analysis"}</button>}
                 </>)}
             </div>
           </div>
