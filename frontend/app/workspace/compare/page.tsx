@@ -11,7 +11,6 @@ import { getResults } from "@/lib/api";
 import { normSub } from "@/lib/subreddits";
 import { CONFLICT_PALETTE, DIMENSION_KEYS, DIMENSION_LABELS, UNCLASSIFIED, emotionShares, filterRecords, mean, round3, useRunData, type ScoredRecord } from "@/lib/analysisData";
 import { useMediaQuery } from "@/lib/useMediaQuery";
-import TrustPanel from "@/components/TrustPanel";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
 import SampleNotice from "@/components/SampleNotice";
 const MIN_GROUP_N = 30;
@@ -165,9 +164,6 @@ function CompareInner() {
           <SampleNotice summary={summary} recordsLength={records.length}/>
 
           {resolving || loading ? (<div className="timeline-chart-empty">Loading your data…</div>) : !runId ? (<NoAnalysisSelected />) : error ? (<div className="timeline-chart-empty">{error}</div>) : !records.length ? (<div className="timeline-chart-empty">This analysis has no scored comments.</div>) : (<>
-          <RevealPanel records={filtered} conflictStats={conflictStats} worst={worst} />
-          {summary && <TrustPanel summary={summary}/>}
-
           <div className="compare-grid">
             <section className="panel" data-tour="compare-polarity" style={PANEL_COLUMN}>
               <div className="panel-heading">
@@ -291,73 +287,6 @@ function CompareInner() {
         </main>
       </div>
     </div>);
-}
-function RevealPanel({ records, conflictStats, worst }: {
-    records: ScoredRecord[];
-    conflictStats: ConflictStat[];
-    worst: ConflictStat | null;
-}) {
-    const [revealed, setRevealed] = useState(false);
-    const charged = useMemo(() => {
-        const bySubreddit = new Map<string, ScoredRecord[]>();
-        records.forEach((record) => {
-            const name = record.subreddit?.trim() || "Unlabelled community";
-            bySubreddit.set(name, [...(bySubreddit.get(name) ?? []), record]);
-        });
-        return Array.from(bySubreddit.entries())
-            .map(([name, rows]) => ({ name, rows, sensitivity: emotionShares(rows).sensitivity }))
-            .sort((a, b) => b.sensitivity - a.sensitivity)[0] ?? null;
-    }, [records]);
-    const focus = worst ?? conflictStats[0] ?? null;
-    const example = useMemo(() => {
-        if (!focus)
-            return null;
-        return records
-            .filter((record) => record.conflict === focus.name)
-            .sort((a, b) => a.source_polarity - b.source_polarity)[0] ?? null;
-    }, [focus, records]);
-    if (!focus || !charged)
-        return null;
-    const gap = charged.sensitivity - (focus.shares.sensitivity ?? 0);
-    return (<section className={`reveal-panel${revealed ? " is-revealed" : ""}`} aria-labelledby="reveal-title">
-      <div className="reveal-copy">
-        <p className="reveal-kicker">THE 10-SECOND REVEAL</p>
-        <h2 id="reveal-title">
-          {worst ? <><span>{focus.name}</span> has the lowest observed sample mean.</> : <>The signal has a shape.</>}
-        </h2>
-        <p className="reveal-lede">
-          {charged.name} has the highest sampled Sensitivity share. {worst ? `${focus.name} has the lowest clearly separated sampled mean polarity.` : "The displayed sample does not show a clear lowest mean at this sample size."}
-          <b> Those are different signals.</b>
-        </p>
-        <button type="button" className="reveal-button" onClick={() => setRevealed((current) => !current)} aria-expanded={revealed}>
-          {revealed ? "HIDE THE EVIDENCE" : "SHOW ME THE EVIDENCE"} <span aria-hidden="true">↗</span>
-        </button>
-      </div>
-      <div className="reveal-stat-grid">
-        <div className="reveal-stat reveal-stat-negative">
-          <span>LOWEST POLARITY</span>
-          <strong>{focus.polarity >= 0 ? "+" : ""}{focus.polarity.toFixed(3)}</strong>
-          <small>{focus.name} · {focus.n.toLocaleString()} records</small>
-        </div>
-        <div className="reveal-stat reveal-stat-charged">
-          <span>MOST CHARGED</span>
-          <strong>{Math.round(charged.sensitivity * 100)}%</strong>
-          <small>{charged.name} · sensitivity share</small>
-        </div>
-      </div>
-      {revealed && (<div className="reveal-evidence">
-        <div>
-          <span className="reveal-evidence-label">WHAT THE MODEL FOUND</span>
-          <p>{Math.abs(gap) < 0.01 ? "The two signals are almost aligned in this slice." : `${charged.name} has ${Math.round(Math.abs(gap) * 100)} percentage points more Sensitivity than ${focus.name}. A community can sound more emotionally charged without having the lowest overall tone.`}</p>
-        </div>
-        {example && (<blockquote>
-          <span className="reveal-evidence-label">ONE RECORD TO CHECK</span>
-          “{example.text.trim().length > 220 ? `${example.text.trim().slice(0, 217)}…` : example.text.trim()}”
-          <small>{example.conflict} · polarity {example.source_polarity >= 0 ? "+" : ""}{example.source_polarity.toFixed(3)}</small>
-        </blockquote>)}
-        <p className="reveal-boundary">This is a lead, not a verdict. Open the source records and check the context before making a claim.</p>
-      </div>)}
-    </section>);
 }
 function SubredditBars({ data, metric }: {
     data: SubredditRow[];

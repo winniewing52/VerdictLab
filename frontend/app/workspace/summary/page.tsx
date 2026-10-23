@@ -8,6 +8,7 @@ import NoAnalysisSelected from "@/components/NoAnalysisSelected";
 import { AccountError, clearLastRunId, getAnalysis, getResults, setLastRunId, type AnalysisResults } from "@/lib/api";
 import { useActiveRun } from "@/lib/useActiveRun";
 import { isDemoPath } from "@/lib/demo";
+import RevealPanel from "@/components/RevealPanel";
 
 function WorkspaceSummaryInner() {
   const router = useRouter();
@@ -64,7 +65,10 @@ function WorkspaceSummaryInner() {
           : !runId && resolveError ? <div className="timeline-chart-empty"><p>{resolveError}</p><button type="button" onClick={retry} className="mt-6 bg-signal text-ink font-medium px-5 py-3 rounded-sm">RETRY</button></div>
           : !runId ? <NoAnalysisSelected />
           : error ? <p className="text-alert font-mono text-sm mt-4">{error}</p>
-          : results?.result_summary ? <Mds05Summary summary={results.result_summary}/> : <div className="timeline-chart-empty">Preparing your research summary…</div>}
+          : results?.result_summary ? <>
+            <Mds05Summary summary={results.result_summary}/>
+            <RevealPanel records={results.result_records ?? []}/>
+          </> : <div className="timeline-chart-empty">Preparing your research summary…</div>}
       </main>
     </div>
   </div>;

@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DashboardSidebar from "@/components/DashboardSidebar";
-import { evaluateSentiment, getBenchmark, type BenchmarkResult } from "@/lib/api";
+import { evaluateSentiment, getAnalysis, getBenchmark, getResults, type AnalysisResults, type BenchmarkResult } from "@/lib/api";
+import { useActiveRun } from "@/lib/useActiveRun";
+import TrustPanel from "@/components/TrustPanel";
 
 function metric(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
 export default function ValidationPage() {
+  return <Suspense fallback={null}><ValidationPageInner /></Suspense>;
+}
+
+function ValidationPageInner() {
   const pathname = usePathname();
   const workspaceMode = pathname?.startsWith("/workspace") ?? false;
+  const { runId } = useActiveRun();
+  const [runSummary, setRunSummary] = useState<NonNullable<AnalysisResults["result_summary"]> | null>(null);
   const returnHref = workspaceMode ? "/workspace" : "/demo";
   const returnLabel = workspaceMode ? "Return to the workspace dashboard" : "Return to the sample analysis";
   const [benchmark, setBenchmark] = useState<BenchmarkResult | null>(null);
@@ -30,12 +38,21 @@ export default function ValidationPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!workspaceMode || !runId)
+      return;
+    getAnalysis(runId).then((analysis) => analysis.status === "complete" ? getResults(runId) : null)
+      .then((results) => setRunSummary(results?.result_summary ?? null))
+      .catch(() => setRunSummary(null));
+  }, [runId, workspaceMode]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!file || !datasetName.trim()) {
       setError("Choose a labelled CSV/XLSX file and name the dataset first.");
       return;
     }
+
     setError(null);
     setSubmitting(true);
     try {
@@ -45,6 +62,7 @@ export default function ValidationPage() {
     } finally {
       setSubmitting(false);
     }
+
   }
 
   const displayed = result ?? benchmark;
@@ -55,7 +73,7 @@ export default function ValidationPage() {
 
   return (
     <div className="pulse-app">
-      <DashboardSidebar active="Validation" />
+      <DashboardSidebar active="Validation" runId={runId} />
       <main className="validation-page">
         <div className="validation-shell">
           <p className="eyebrow">05 · VALIDATION / EVIDENCE</p>
@@ -72,6 +90,8 @@ export default function ValidationPage() {
           </div>
 
           {error && <p className="validation-error" role="alert">{error}</p>}
+
+          {runSummary && <TrustPanel summary={runSummary} />}
 
           <section className="validation-card validation-card--primary" id="agreement">
             <div className="validation-section-head">
