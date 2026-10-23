@@ -10,6 +10,7 @@ import { getResults } from "@/lib/api";
 import { dailySeries, detectScale, scaleKey, scaleText, useRunData, whenLabel, type DailyPoint } from "@/lib/analysisData";
 import { useActiveRun } from "@/lib/useActiveRun";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
+import SampleNotice from "@/components/SampleNotice";
 type TimelineEvent = {
     key: string;
     date: string;
@@ -39,26 +40,50 @@ const TIMELINE_GLOSSARY: GlossaryItem[] = [
     { term: "Dual axis", plain: "One chart with two scales.", detail: "The left axis counts comments (bars). The right axis is polarity (line). Read each against its own axis." },
     { term: "Time bucket", plain: "A short slice of the day.", detail: "If all your data is from one date, the x-axis switches from days to time-of-day buckets." },
     { term: "Event marker", plain: "A dashed vertical line on the chart.", detail: "Marks the day or time of a strongest-signal comment. Red is negative, green is positive, gold is the one selected." },
-    { term: "Annotated event", plain: "A comment with an unusually strong tone.", detail: "The slice's strongest comments, ranked by how far their polarity is from zero." },
+    { term: "Strongest-polarity comment", plain: "A comment with an unusually strong polarity.", detail: "The displayed sample's records ranked by distance from zero." },
     { term: "Drill-down", plain: "Zooming in on a single comment.", detail: "Shows its text, polarity, VADER score, emotion, upvotes and how its day compared." },
     { term: "VADER", plain: "A ready-made scorer for short, informal text.", detail: "Shown beside polarity as a second opinion on the comment's tone." },
     { term: "Slice", plain: "The part of the data you are looking at right now.", detail: "Filters for conflict, subreddit, dates or keywords change the slice, and every chart updates." },
 ];
 const INFO: Record<"volumePolarity" | "annotatedEvents" | "eventDrilldown", InfoContent> = {
-    volumePolarity: { title: "Volume × polarity", body: <>Two measures on one chart. <b>Bars</b> (left axis) count the comments in each period. The <b>line</b> (right axis) is the average mood, smoothed over a few periods; below zero means negative. Dashed <b>vertical markers</b> flag the strongest-signal comments, and clicking one selects it.</> },
-    annotatedEvents: { title: "Annotated events", body: <>The <b>strongest-signal comments</b> in the current slice (up to 25), ranked by how far their polarity is from zero and listed in time order. Each row shows the date, conflict, a preview and the comment&rsquo;s polarity.</> },
+    volumePolarity: { title: "Volume × polarity", body: <>Two measures on one chart. <b>Bars</b> show observed or estimated volume in each period. The <b>line</b> is the average mood over the last three observed periods; below zero means negative. Dashed markers flag the strongest-polarity comments.</> },
+    annotatedEvents: { title: "Strongest-polarity comments", body: <>The strongest-polarity comments in the current slice (up to 25), ranked by distance from zero and listed in time order.</> },
     eventDrilldown: { title: "Event drill-down", body: <>The <b>full detail of the selected comment</b>: its text, polarity, VADER score, emotion and upvotes when available, plus the volume and rolling polarity of the day (or time bucket) it was posted in.</> },
 };
 function TimelineInner() {
     const { runId, resolving } = useActiveRun();
-    const { summary, records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error } = useRunData(runId, getResults);
+    const { summary, records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error, filterNotice } = useRunData(runId, getResults);
     const [selectedKey, setSelectedKey] = useState<string | null>(null);
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     const sampleScale = summary && summary.records_after_dedup > records.length ? summary.records_after_dedup / records.length : 1;
+    const fullDatasetSelected = filters.startDate === defaults.startDate &&
+        filters.endDate === defaults.endDate &&
+        filters.keyword === defaults.keyword &&
+        filters.kind === defaults.kind &&
+        filters.selectedSubreddits.length === defaults.selectedSubreddits.length &&
+        filters.selectedSubreddits.every((value) => defaults.selectedSubreddits.includes(value)) &&
+        filters.selectedConflicts.length === defaults.selectedConflicts.length &&
+        filters.selectedConflicts.every((value) => defaults.selectedConflicts.includes(value));
+    const useFullDatasetTrend = Boolean(fullDatasetSelected && sampleScale > 1 && summary?.trend_dates?.length &&
+        summary.polarity_trend?.length && summary.volume_trend?.length);
     const scale = useMemo(() => detectScale(filtered), [filtered]);
     const scaleLabels = scaleText(scale);
-    const dailySeriesData = useMemo(() => dailySeries(filtered, 3, scale).map((point) => ({ ...point, volume: Math.round(point.volume * sampleScale) })), [filtered, sampleScale, scale]);
+    const dailySeriesData = useMemo(() => {
+        if (useFullDatasetTrend && summary?.trend_dates && summary.polarity_trend && summary.volume_trend) {
+            return summary.trend_dates.map((date, index) => ({
+                date,
+                volume: summary.volume_trend?.[index] ?? 0,
+                polarity: summary.polarity_trend?.[index] ?? 0,
+                raw: summary.polarity_trend?.[index] ?? 0,
+                pleasantness: 0,
+                attention: 0,
+                sensitivity: 0,
+                aptitude: 0,
+            }));
+        }
+        return dailySeries(filtered, 3, scale).map((point) => ({ ...point, sampleVolume: point.volume, volume: Math.round(point.volume * sampleScale) }));
+    }, [filtered, sampleScale, scale, summary?.polarity_trend, summary?.trend_dates, summary?.volume_trend, useFullDatasetTrend]);
     const events = useMemo<TimelineEvent[]>(() => {
         const dated = filtered.filter((record) => !!scaleKey(record, scale));
         return dated
@@ -92,7 +117,7 @@ function TimelineInner() {
         <main className="dashboard-content timeline-content">
           <p className="eyebrow">02 · TIMELINE</p>
           <h1>Sentiment over time in your uploaded data</h1>
-          <p className="timeline-intro">{scale.kind === "time" ? `Your data covers a single date (${scale.date}), so the x-axis shows time of day in ${scale.bucketMinutes}-minute buckets.` : "Your data spans several dates, so the x-axis shows dates."} Dual-axis: comment volume (bars) and {scaleLabels.rolling} polarity (line), both computed from the comments in your file. Vertical markers are the strongest-signal comments in the slice — click any one to inspect.</p>
+          <p className="timeline-intro">{scale.kind === "time" ? `Your data covers a single date (${scale.date}), so the x-axis shows time of day in ${scale.bucketMinutes}-minute buckets.` : "Your data spans several dates, so the x-axis shows dates."} Dual-axis: record volume (bars) and {scaleLabels.rolling} polarity (line), both computed from the records in your file. Vertical markers are the strongest-polarity comments in the slice — click any one to inspect.</p>
 
           <div className="pulse-toolbar">
             <button type="button" className="tour-trigger" onClick={() => setTourOpen(true)}>▶ TAKE THE 60-SECOND TOUR</button>
@@ -101,12 +126,13 @@ function TimelineInner() {
           {tourOpen && <PulseTour steps={TIMELINE_TOUR_STEPS} onClose={() => setTourOpen(false)}/>}
           {glossaryOpen && <GlossaryModal items={TIMELINE_GLOSSARY} onClose={() => setGlossaryOpen(false)}/>}
 
-          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions}/>
+          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} filterNotice={filterNotice}/>
+          <SampleNotice summary={summary} recordsLength={records.length}/>
 
           {resolving || loading ? <div className="timeline-chart-empty">Loading your data…</div> : !runId ? <NoAnalysisSelected /> : error ? <div className="timeline-chart-empty">{error}</div> : !records.length ? <div className="timeline-chart-empty">This analysis has no scored comments.</div> : <>
-          <section className="timeline-panel chart-panel" data-tour="timeline-chart"><div className="timeline-panel-heading"><div><h2>When did the conversation change?</h2><p>{dailySeriesData.length ? "Click an event marker to drill in →" : "This file has no usable date column, so no time series can be drawn."}{undated > 0 && dailySeriesData.length > 0 ? ` ${undated.toLocaleString()} comments without a usable date/time are not plotted.` : ""}{sampleScale > 1 ? ` Volumes are estimated from an evenly spaced sample of ${records.length.toLocaleString()} of ${summary?.records_after_dedup.toLocaleString()} unique records.` : ""}</p></div><InfoTip title={INFO.volumePolarity.title}>{INFO.volumePolarity.body}</InfoTip></div><VolumePolarityChart data={dailySeriesData} events={events} selected={selected} onSelect={(event) => setSelectedKey(event.key)} timeOfDay={scale.kind === "time"}/><HowToRead>The <b>blue bars</b> (left axis) are how many comments were posted. The <b>gold line</b> (right axis) is the average mood; <b>below zero = negative</b>. Dashed markers are the strongest comments: <b>red</b> = negative, <b>green</b> = positive, <b>gold</b> = selected. Click one to inspect it.</HowToRead></section>
+          <section className="timeline-panel chart-panel" data-tour="timeline-chart"><div className="timeline-panel-heading"><div><h2>When did the conversation change?</h2><p>{dailySeriesData.length ? "Click an event marker to drill in →" : "This file has no usable date column, so no time series can be drawn."}{undated > 0 && dailySeriesData.length > 0 ? ` ${undated.toLocaleString()} records without a usable date/time are not plotted.` : ""}{sampleScale > 1 && !useFullDatasetTrend ? ` Volumes are estimated from an evenly spaced sample of ${records.length.toLocaleString()} of ${summary?.records_after_dedup.toLocaleString()} cleaned records.` : ""}</p></div><InfoTip title={INFO.volumePolarity.title}>{INFO.volumePolarity.body}</InfoTip></div><VolumePolarityChart data={dailySeriesData} events={events} selected={selected} onSelect={(event) => setSelectedKey(event.key)} timeOfDay={scale.kind === "time"}/><HowToRead>The <b>blue bars</b> are {useFullDatasetTrend ? "the cleaned-record volume" : "estimated volume when sampling is active"}; the <b>gold line</b> is the average mood; <b>below zero = negative</b>. Dashed markers are the strongest-polarity comments{sampleScale > 1 ? " among the displayed sample" : ""}. Click one to inspect it.</HowToRead></section>
           <div className="timeline-bottom-grid">
-            <section className="timeline-panel event-index" data-tour="timeline-events"><div className="timeline-panel-heading"><div><h2>Which comments mark the biggest mood shifts?</h2><p>{events.length} events in window</p></div><InfoTip title={INFO.annotatedEvents.title}>{INFO.annotatedEvents.body}</InfoTip></div><div className="event-index-list">{events.map((event) => <button type="button" key={event.key} className={`event-index-row${selected?.key === event.key ? " is-selected" : ""}`} onClick={() => setSelectedKey(event.key)}><span>{scale.kind === "time" ? event.when.slice(11) || event.date : event.date}</span><i className={event.tone}/><div><small>{event.conflict}</small><strong>{event.title}</strong></div><b>{event.polarity.toFixed(2)}</b></button>)}{!events.length && <p className="empty-state">No dated comments match the current filters.</p>}</div><HowToRead>Each row is one standout comment, in time order. <b>Green dot</b> = positive, <b>red dot</b> = negative; the number on the right is its polarity (-1 to +1). Click a row to see it in the drill-down and highlight it on the chart.</HowToRead></section>
+            <section className="timeline-panel event-index" data-tour="timeline-events"><div className="timeline-panel-heading"><div><h2>Which comments have the strongest polarity?</h2><p>{events.length} events in window{sampleScale > 1 ? " · among the displayed sample" : ""}</p></div><InfoTip title={INFO.annotatedEvents.title}>{INFO.annotatedEvents.body}</InfoTip></div><div className="event-index-list">{events.map((event) => <button type="button" key={event.key} className={`event-index-row${selected?.key === event.key ? " is-selected" : ""}`} onClick={() => setSelectedKey(event.key)}><span>{scale.kind === "time" ? event.when.slice(11) || event.date : event.date}</span><i className={event.tone}/><div><small>{event.conflict}</small><strong>{event.title}</strong></div><b>{event.polarity.toFixed(2)}</b></button>)}{!events.length && <p className="empty-state">No dated comments match the current filters.</p>}</div><HowToRead>Each row is one strongest-polarity comment, in time order. <b>Green dot</b> = positive, <b>red dot</b> = negative; the number on the right is its polarity (-1 to +1). Click a row to inspect it.</HowToRead></section>
             <section className="timeline-panel event-detail" data-tour="timeline-detail"><div className="timeline-panel-heading"><div><h2>Why did this result receive this verdict?</h2><p>Select an event from the list or the chart</p></div><InfoTip title={INFO.eventDrilldown.title}>{INFO.eventDrilldown.body}</InfoTip></div>{selected ? <div className="event-detail-body"><span className="detail-kicker">{selected.when} · {selected.conflict}{selected.subreddit ? ` · ${selected.subreddit}` : ""}</span><h3>{selected.text.length > 220 ? `${selected.text.slice(0, 220)}...` : selected.text}</h3><div className="detail-score"><span>COMMENT POLARITY</span><strong className={selected.polarity < 0 ? "is-negative" : ""}>{selected.polarity >= 0 ? "+" : ""}{selected.polarity.toFixed(2)}</strong></div><p>VADER {selected.vader.toFixed(2)}{selected.emotion ? ` · emotion: ${selected.emotion}` : ""}{selected.upvotes !== null && selected.upvotes !== undefined ? ` · ${selected.upvotes.toLocaleString()} upvotes` : ""}{selectedDay ? ` · that ${scale.kind === "time" ? "time bucket" : "day"}: ${selectedDay.volume.toLocaleString()} comments, ${scaleLabels.rolling} polarity ${selectedDay.polarity.toFixed(3)}` : ""}.</p><a className="detail-button" href={runId ? `/workspace/explorer?run=${encodeURIComponent(runId)}` : "/workspace/explorer"}>OPEN SOURCE RECORDS →</a></div> : <div className="event-detail-body"><p>No event selected.</p></div>}<HowToRead>The <b>big number</b> is this comment&rsquo;s polarity. Compare it with the polarity of its day at the bottom of the text: a comment far from its day&rsquo;s average is an <b>outlier</b>. Use <b>OPEN SOURCE RECORDS</b> to read it in context.</HowToRead></section>
           </div>
           </>}
@@ -150,6 +176,9 @@ function VolumePolarityTooltip({ active, payload, label }: {
     payload?: {
         dataKey?: string;
         value: number;
+        payload?: {
+            sampleVolume?: number;
+        };
     }[];
     label?: string;
 }) {
@@ -159,7 +188,7 @@ function VolumePolarityTooltip({ active, payload, label }: {
     const polarity = payload.find((item) => item.dataKey === "polarity")?.value;
     return (<div className="chart-tooltip">
       <span className="chart-tooltip-date">{label}</span>
-      {volume !== undefined && <span className="chart-tooltip-value">volume : {volume}</span>}
+      {volume !== undefined && <span className="chart-tooltip-value">volume : {payload.find((item) => item.dataKey === "volume")?.payload?.sampleVolume !== undefined ? `≈ ${volume} estimated · ${payload.find((item) => item.dataKey === "volume")?.payload?.sampleVolume} in sample` : volume}</span>}
       {polarity !== undefined && <span className="chart-tooltip-value">polarity : {polarity.toFixed(3)}</span>}
     </div>);
 }

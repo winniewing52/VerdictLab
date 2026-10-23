@@ -3,7 +3,7 @@ import { Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 
 import { useActiveRun } from "@/lib/useActiveRun";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
 import { getResults } from "@/lib/api";
-import { CONFLICT_PALETTE, DIMENSION_COLORS, DIMENSION_KEYS, DIMENSION_LABELS, dailySeries, detectScale, scaleText, emotionShares, filterRecords, topConcepts, useRunData, } from "@/lib/analysisData";
+import { CONFLICT_PALETTE, DIMENSION_COLORS, DIMENSION_KEYS, DIMENSION_LABELS, UNCLASSIFIED, dailySeries, detectScale, scaleText, emotionShares, filterRecords, topConcepts, useRunData, } from "@/lib/analysisData";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, } from "recharts";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import AnalysisFilters from "@/components/AnalysisFilters";
@@ -11,10 +11,11 @@ import InfoTip, { type InfoContent } from "@/components/InfoTip";
 import PulseTour, { type TourStep } from "@/components/PulseTour";
 import GlossaryModal, { type GlossaryItem } from "@/components/GlossaryModal";
 import { useMediaQuery } from "@/lib/useMediaQuery";
+import SampleNotice from "@/components/SampleNotice";
 const EMOTIONS_TOUR_STEPS: TourStep[] = [
     { target: "emotions-radar", title: "Hourglass radar", body: "Each corner is one of the four emotion dimensions. The further a shape stretches toward a corner, the larger the share of comments dominated by that emotion. Pick two conflicts in the filters to compare their shapes side by side." },
     { target: "emotions-stream", title: "Emotion stream", body: "The same four dimensions over time. Each coloured band is one dimension and the bands always stack to 100%, so a widening band means that emotion is taking over the conversation." },
-    { target: "emotions-cloud", title: "Concept word cloud", body: "The most-used words in your comments. Bigger words appear in more comments; the colour shows which emotion dimension most often goes with that word." },
+    { target: "emotions-cloud", title: "Frequent words", body: "The most-used words in the stored display text. Bigger words appear in more records; colour shows the associated exploratory dimension when available." },
 ];
 const EMOTIONS_GLOSSARY: GlossaryItem[] = [
     { term: "Hourglass of Emotions", plain: "An exploratory model with four dimensions.", detail: "Instead of just good vs bad, each comment is assigned a SenticNet-derived dimension. These labels are not human-validated in this build." },
@@ -22,36 +23,36 @@ const EMOTIONS_GLOSSARY: GlossaryItem[] = [
     { term: "Attention", plain: "Interest vs surprise or boredom.", detail: "How engaged or alert the person sounds." },
     { term: "Sensitivity", plain: "Fear and anger.", detail: "How emotionally reactive the comment is. High sensitivity often means distress." },
     { term: "Aptitude", plain: "Trust vs disgust.", detail: "How much the person accepts or rejects what they are talking about." },
-    { term: "Dominant emotion", plain: "The one dimension that best describes a comment.", detail: "Every comment counts toward exactly one dimension, so the shares always add up to 100%." },
+    { term: "Dominant dimension", plain: "The SenticNet-derived exploratory dimension with the strongest available signal.", detail: "Shares are calculated among records with an available dimension; records without sentic vectors are excluded." },
     { term: "Share", plain: "The percentage of comments that fall into a dimension.", detail: "A 40% Sensitivity share means four in ten comments are mainly fear or anger." },
     { term: "Radar chart", plain: "A web-shaped chart with one axis per dimension.", detail: "The further a shape reaches along an axis, the bigger that dimension's share. Shapes are easy to compare at a glance." },
     { term: "Conflict", plain: "The topic a comment belongs to, such as Israel-Gaza or US-Iran.", detail: "When you select conflicts, each one gets its own coloured shape on the radar." },
     { term: "Emotion stream", plain: "A stacked area chart of the four dimensions over time.", detail: "Each band is one dimension. Together the bands fill the chart to 100%, so you see the mix shifting rather than raw counts." },
     { term: "Stacked area", plain: "Bands piled on top of each other.", detail: "Read a band's thickness, not its height on the axis, to see how big that dimension is." },
     { term: "Time bucket", plain: "A short slice of the day.", detail: "If all your data is from one date, the stream switches from days to time-of-day buckets." },
-    { term: "Concept word cloud", plain: "The most frequent words in your comments.", detail: "Short words and everyday filler words are ignored. A word is counted once per comment, however often it repeats." },
+    { term: "Frequent words", plain: "The most frequent words in stored display text.", detail: "Text may be redacted and truncated to 500 characters. Short words and everyday filler words are ignored. A word is counted once per record, however often it repeats." },
     { term: "Word colour", plain: "The emotion dimension most often linked to that word.", detail: "It comes from the comments the word appears in, so it shows the mood around a word, not the word's dictionary meaning." },
     { term: "Slice", plain: "The part of the data you are looking at right now.", detail: "Filters for conflict, subreddit, dates or keywords change the slice, and every chart updates." },
 ];
 const INFO: Record<"radar" | "stream" | "cloud", InfoContent> = {
     radar: { title: "Hourglass radar", body: <>Shows the <b>share of comments</b> whose dominant emotion is each of the four Hourglass dimensions. With no conflict selected it covers all comments in the slice; with conflicts selected, <b>each conflict gets its own coloured shape</b> so you can compare them. The count in brackets is how many comments each shape is based on.</> },
     stream: { title: "Emotion stream", body: <>The same four dimensions <b>over time</b>. Each period shows the share of comments in each dimension, stacked so the bands always fill 100%. If your data covers a single date, the horizontal axis switches to <b>time-of-day buckets</b> instead of days.</> },
-    cloud: { title: "Concept word cloud", body: <>The <b>most frequent words</b> in the comments of the current slice (short and filler words removed). <b>Size</b> = how many comments use the word. <b>Colour</b> = the emotion dimension most often found in those comments. Hover a word to see its exact count.</> },
+    cloud: { title: "Frequent words", body: <>The <b>most frequent words</b> in stored display text (possibly redacted and truncated to 500 characters). <b>Size</b> = how many records use the word. <b>Colour</b> = the SenticNet-derived exploratory dimension most often found in those records, when available.</> },
 };
 function EmotionsInner() {
     const phone = useMediaQuery("(max-width: 620px)");
     const { runId, resolving } = useActiveRun();
-    const { records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error } = useRunData(runId, getResults);
+    const { summary, records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error, filterNotice } = useRunData(runId, getResults);
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     const conflictColor = (name: string) => CONFLICT_PALETTE[Math.max(0, conflictOptions.indexOf(name)) % CONFLICT_PALETTE.length];
     const activeConflicts = filters.selectedConflicts.filter((name) => conflictOptions.includes(name));
     const conflictShares = useMemo(() => activeConflicts.map((name) => {
-        const rows = filterRecords(records, filters, { conflict: true }).filter((record) => record.conflict === name);
+        const rows = filterRecords(records, filters, { conflict: true }).filter((record) => (record.conflict ?? UNCLASSIFIED) === name);
         return { name, n: rows.length, shares: emotionShares(rows) };
     }), [records, filters, activeConflicts.join("|")]);
     const overallShares = useMemo(() => emotionShares(filtered), [filtered]);
-    const radarSeries = conflictShares.length ? conflictShares.map((item) => ({ key: item.name, color: conflictColor(item.name), shares: item.shares, n: item.n })) : [{ key: "All comments", color: CONFLICT_PALETTE[0], shares: overallShares, n: filtered.length }];
+    const radarSeries = conflictShares.length ? conflictShares.map((item) => ({ key: item.name, color: conflictColor(item.name), shares: item.shares, n: item.shares.known, total: item.n })) : [{ key: "All comments", color: CONFLICT_PALETTE[0], shares: overallShares, n: overallShares.known, total: overallShares.total }];
     const radarData = DIMENSION_KEYS.map((dim) => {
         const row: Record<string, string | number> = { dimension: DIMENSION_LABELS[dim] };
         for (const series of radarSeries)
@@ -68,7 +69,7 @@ function EmotionsInner() {
         const min = Math.min(...words.map((word) => word.count), max);
         return words.map((word) => ({ ...word, size: 14 + Math.round(((word.count - min) / Math.max(1, max - min)) * 34) }));
     }, [filtered]);
-    const state = resolving || loading ? "Loading your data…" : !runId ? "No analysis selected. Start one from the Pulse page." : error ? error : !records.length ? "This analysis has no scored comments." : !filtered.length ? "No comments match the current filters." : null;
+    const state = resolving || loading ? "Loading your data…" : !runId ? "No analysis selected. Start one from the Pulse page." : error ? error : !records.length ? "This analysis has no scored comments." : !filtered.length ? "No comments match the current filters." : !overallShares.known ? "Emotion dimensions are not available for this input (no SenticNet sentic vectors)" : null;
     return (<main className="pulse-app">
       <DashboardSidebar active="Emotions" runId={runId}/>
       <div className="dashboard-shell">
@@ -96,7 +97,8 @@ function EmotionsInner() {
           {tourOpen && <PulseTour steps={EMOTIONS_TOUR_STEPS} onClose={() => setTourOpen(false)}/>}
           {glossaryOpen && <GlossaryModal items={EMOTIONS_GLOSSARY} onClose={() => setGlossaryOpen(false)}/>}
 
-          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions}/>
+          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} filterNotice={filterNotice}/>
+          <SampleNotice summary={summary} recordsLength={records.length}/>
 
           {state ? (!runId && !resolving && !loading ? <NoAnalysisSelected /> : <div className="timeline-chart-empty">{state}</div>) : (<>
           <div className="two-col-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 11 }}>
@@ -104,13 +106,13 @@ function EmotionsInner() {
               <div className="panel-heading">
                 <div>
                   <h2>Which emotions dominate each conflict?</h2>
-                  <p>{conflictShares.length ? "Share of each conflict's comments per dimension" : "Share of all comments per dimension"}</p>
+                  <p>{conflictShares.length ? "Share among records in each conflict with an available SenticNet-derived dimension" : `Share among ${overallShares.known.toLocaleString()} of ${overallShares.total.toLocaleString()} records with an available dimension`}</p>
                 </div>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                   <div className="legend">
                     {radarSeries.map((series) => (<span key={series.key} style={{ marginRight: 10 }}>
                         <i style={{ background: series.color }}/>
-                        {series.key} ({series.n.toLocaleString()})
+                        {series.key} ({series.n.toLocaleString()} of {series.total.toLocaleString()})
                       </span>))}
                   </div>
                   <InfoTip title={INFO.radar.title}>{INFO.radar.body}</InfoTip>
@@ -128,7 +130,7 @@ function EmotionsInner() {
                 </ResponsiveContainer>
               </div>
               <HowToRead style={{ marginTop: "auto" }}>
-                Each <b>corner</b> is one emotion dimension. The <b>further a shape reaches toward a corner</b>, the bigger that dimension&rsquo;s share of comments (the rings show %). A <b>lopsided shape</b> means one emotion dominates; a <b>rounder shape</b> means a balanced mix. With several conflicts selected, <b>compare the coloured shapes</b> to see how their reactions differ.
+                Each <b>corner</b> is one SenticNet-derived exploratory dimension. The <b>further a shape reaches toward a corner</b>, the bigger that dimension&rsquo;s share among records with an available dimension. With several conflicts selected, <b>compare the coloured shapes</b> as exploratory signals.
               </HowToRead>
             </section>
 
@@ -136,7 +138,7 @@ function EmotionsInner() {
               <div className="panel-heading">
                 <div>
                   <h2>When did the emotional mix shift?</h2>
-                  <p>{streamData.length ? `Stacked area over time — ${scaleLabels.per} share of comments per dimension${scale.kind === "time" ? ` · ${scale.date}, by time of day` : ""}` : "No dated comments, so no stream can be drawn"}</p>
+                  <p>{streamData.length ? `Stacked area over time — ${scaleLabels.per} share among records with an available dimension${scale.kind === "time" ? ` · ${scale.date}, by time of day` : ""}` : "No dated comments, so no stream can be drawn"}</p>
                 </div>
                 <InfoTip title={INFO.stream.title}>{INFO.stream.body}</InfoTip>
               </div>
@@ -153,7 +155,7 @@ function EmotionsInner() {
                 </ResponsiveContainer>) : <div className="timeline-chart-empty">This file has no usable date column.</div>}
               </div>
               <HowToRead style={{ marginTop: "auto" }}>
-                The <b>horizontal axis is time</b> ({scale.kind === "time" ? "time of day" : "dates"}); the <b>vertical axis is 100% of comments</b>. Each <b>coloured band</b> is one dimension, and <b>a thicker band = a bigger share</b> in that period. Watch for a band that <b>widens or shrinks</b>: that is the mood of the conversation shifting. Hover the chart to read exact percentages.
+                The <b>horizontal axis is time</b> ({scale.kind === "time" ? "time of day" : "dates"}); the <b>vertical axis is the available-dimension share</b>. Each <b>coloured band</b> is one dimension. Watch for a band that <b>widens or shrinks</b> as an exploratory signal. Hover the chart to read exact percentages.
               </HowToRead>
             </section>
           </div>
@@ -161,8 +163,8 @@ function EmotionsInner() {
           <section className="panel" data-tour="emotions-cloud" style={{ marginTop: 9 }}>
             <div className="panel-heading">
               <div>
-                <h2>What are people talking about?</h2>
-                <p>Most frequent words in your comments, sized by number of comments using them, coloured by their dominant emotion</p>
+                <h2>Frequent words</h2>
+                <p>Most frequent words in stored display text, sized by number of records using them, with exploratory dimension colours when available</p>
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 <div className="legend">
@@ -181,12 +183,12 @@ function EmotionsInner() {
                 gap: "6px 16px",
                 alignItems: "baseline",
             }}>
-              {wordCloud.map((w) => (<span key={w.text} title={`${w.text}: ${w.count.toLocaleString()} comments`} style={{ fontSize: w.size, color: DIMENSION_COLORS[w.emotion], fontWeight: 600 }}>
+              {wordCloud.map((w) => (<span key={w.text} title={`${w.text}: ${w.count.toLocaleString()} records`} style={{ fontSize: w.size, color: w.emotion ? DIMENSION_COLORS[w.emotion] : "#8a8f98", fontWeight: 600 }}>
                   {w.text}
                 </span>))}
             </div>
             <HowToRead>
-              <b>Bigger word</b> = used in more comments. <b>Colour</b> = the emotion dimension most often found alongside that word (see the legend above). Use it to spot <b>what people keep talking about</b> and <b>how they feel about it</b>. Hover a word to see its exact comment count.
+              <b>Bigger word</b> = used in more stored records. <b>Colour</b> = the SenticNet-derived exploratory dimension most often found alongside that word, when available. Hover a word to see its exact record count.
             </HowToRead>
           </section>
           </>)}

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
+import shutil
+import tempfile
 from typing import Optional
 
 import threading
@@ -117,11 +120,30 @@ def create_analysis(
     db.commit()
     db.refresh(analysis)
 
-    file_bytes = file.file.read() if file else None
+    file_path = None
+    if file:
+        # UploadFile is backed by a spooled temporary file, but it may be closed
+        # as soon as this request ends. Copy it to a durable temp file before
+        # handing the work to the background pipeline. This also avoids keeping
+        # a multi-gigabyte upload in Python heap memory.
+        suffix = "." + (file.filename or "upload.csv").rsplit(".", 1)[-1].lower()
+        try:
+            file.file.seek(0)
+            with tempfile.NamedTemporaryFile(prefix="verdictlab-upload-", suffix=suffix, delete=False) as stored:
+                shutil.copyfileobj(file.file, stored, length=8 * 1024 * 1024)
+                file_path = stored.name
+        except Exception:
+            if file_path:
+                try:
+                    os.unlink(file_path)
+                except FileNotFoundError:
+                    pass
+            raise
+
     # Do not keep the HTTP request open while the hosted instance processes the file.
     threading.Thread(
         target=run_pipeline,
-        args=(analysis.id, file_bytes, file.filename if file else None),
+        args=(analysis.id, None, file.filename if file else None, file_path),
         daemon=True,
     ).start()
 
@@ -155,9 +177,8 @@ def list_analyses(
 def get_analysis(
     analysis_id: str,
     db: Session = Depends(get_db),
-    current: tuple = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     return _serialize(a)
 
@@ -165,9 +186,8 @@ def get_analysis(
 def get_results(
     analysis_id: str,
     db: Session = Depends(get_db),
-    current: tuple = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     records = []
     for record in a.result_records or []:
@@ -191,9 +211,8 @@ def get_results(
 def get_report(
     analysis_id: str,
     db: Session = Depends(get_db),
-    current: tuple = Depends(get_current_user),
+    user: Optional[User] = Depends(get_optional_user),
 ):
-    user, _, _ = current
     a = _load_owned(db, analysis_id, user)
     if a.status != "complete":
         raise HTTPException(409, f"Analysis is not complete yet (status: {a.status})")

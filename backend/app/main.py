@@ -3,12 +3,14 @@ import os
 import threading
 import traceback
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .database import Base, engine, run_startup_migrations
+from .database import Base, SessionLocal, engine, run_startup_migrations
+from .models import Analysis
 from .routers import analyses, auth, live, evaluations
 from .services.demo_seed import start_demo_seed_thread
 from .services.retention import purge_expired, start_retention_worker
@@ -18,6 +20,30 @@ logger = logging.getLogger("verdictlab")
 Base.metadata.create_all(bind=engine)
 run_startup_migrations()
 
+
+def recover_interrupted_analyses() -> None:
+    """Do not expose work from a process that has already stopped."""
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=15)
+        interrupted = (
+            db.query(Analysis)
+            .filter(Analysis.status.in_(("queued", "running")), Analysis.updated_at < cutoff)
+            .all()
+        )
+        for analysis in interrupted:
+            analysis.status = "failed"
+            analysis.error = (
+                "The analysis worker stopped before this analysis finished. "
+                "Please start a new analysis."
+            )
+        if interrupted:
+            db.commit()
+            logger.warning("Marked %d interrupted analyses as failed", len(interrupted))
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Start-up: purge expired data, create the demo sample, keep sweeping in the background."""
@@ -26,6 +52,10 @@ async def lifespan(_app: FastAPI):
         purge_expired()
     except Exception:
         logger.exception("Initial retention sweep failed")
+    try:
+        recover_interrupted_analyses()
+    except Exception:
+        logger.exception("Could not recover interrupted analyses")
     start_retention_worker(stop)
     if os.getenv("VERDICTLAB_SKIP_DEMO_SEED", "").lower() not in ("1", "true", "yes"):
         start_demo_seed_thread()

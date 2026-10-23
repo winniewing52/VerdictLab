@@ -1,0 +1,30 @@
+{
+  "id": "A-10ecee17",
+  "title": "Csv thread analysis",
+  "source_type": "csv",
+  "source_url": null,
+  "status": "complete",
+  "stages": {
+    "collecting_content": {
+      "label": "Collecting content",
+      "progress": 100,
+      "status": "done"
+    },
+    "cleaning_dedup": {
+      "label": "Cleaning & dedup",
+      "progress": 100,
+      "status": "done"
+    },
+    "model_comparison": {
+      "label": "Model comparison",
+      "progress": 100,
+      "status": "done"
+    }
+  },
+  "error": null,
+  "records_in": 686274,
+  "quality_score": null,
+  "created_at": "2026-10-14T09:34:18.825294",
+  "updated_at": "2026-10-14T09:37:46.650929",
+  "is_demo": false
+}

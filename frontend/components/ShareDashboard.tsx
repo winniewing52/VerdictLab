@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 
 export default function ShareDashboard() {
+    const pathname = usePathname();
+    const demoMode = pathname === "/demo" || pathname?.startsWith("/demo/");
     const [open, setOpen] = useState(false);
     const [url, setUrl] = useState("");
     const [feedback, setFeedback] = useState<string | null>(null);
@@ -12,12 +15,10 @@ export default function ShareDashboard() {
     useEffect(() => {
         if (!open)
             return;
-        const configuredHost = process.env.NEXT_PUBLIC_SHARE_HOST?.replace(/\/$/, "");
+        const configuredOrigin = (process.env.NEXT_PUBLIC_SHARE_ORIGIN ?? process.env.NEXT_PUBLIC_SHARE_HOST)?.replace(/\/$/, "");
         const browserUrl = new URL(window.location.href);
-        const origin = configuredHost
-            ? `${configuredHost}${browserUrl.port ? `:${browserUrl.port}` : ""}`
-            : browserUrl.origin;
-        setUrl(`${origin}/`);
+        const origin = configuredOrigin || browserUrl.origin;
+        setUrl(`${origin}${demoMode ? "/demo/pulse" : "/"}`);
         setFeedback(null);
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape")
@@ -56,7 +57,7 @@ export default function ShareDashboard() {
 
     return <>
       <button type="button" className="share-dashboard-button" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span aria-hidden="true">▦</span> Share dashboard
+        <span aria-hidden="true">▦</span> {demoMode ? "Share demo / QR" : "Share dashboard"}
       </button>
       {open && <div className="share-overlay" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget)
@@ -74,6 +75,7 @@ export default function ShareDashboard() {
             {url && <QRCodeSVG value={url} size={224} bgColor="#ffffff" fgColor="#080b0e" level="M" includeMargin />}
           </div>
           <p className="share-help">Scan this code with your phone camera. You may need to sign in on the new device.</p>
+          <p className="share-network-note">This QR code opens the demo when your phone is on the same network as this computer.</p>
           <label className="share-url-label" htmlFor="dashboard-share-url">Dashboard link</label>
           <input id="dashboard-share-url" className="share-url" value={url} readOnly onFocus={(event) => event.currentTarget.select()} />
           <div className="share-actions">

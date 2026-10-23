@@ -153,7 +153,11 @@ def ingest_reddit(url: str) -> list[dict]:
     headers = {"User-Agent": "VerdictLab/0.1 ( research tool)"}
     with httpx.Client(timeout=15, headers=headers) as client:
         resp = client.get(json_url)
-        if resp.status_code == 403 and re.search(r"/r/[^/]+/?$", url.split("?")[0]):
+        if resp.status_code == 403 and re.match(
+            r"https?://(?:www\.|old\.|new\.)?reddit\.com/",
+            url,
+            re.IGNORECASE,
+        ):
             return _ingest_reddit_rss(client, url)
         resp.raise_for_status()
         data = resp.json()
@@ -299,16 +303,27 @@ def ingest_youtube(url: str) -> list[dict]:
                 break
     return records
 
-def ingest_csv(file_bytes: bytes) -> list[dict]:
-    text = file_bytes.decode("utf-8-sig", errors="ignore")
-    sample = text[:4096]
+def ingest_csv(file_source: bytes | str | Path) -> list[dict]:
+    if isinstance(file_source, (str, Path)):
+        stream = open(file_source, "r", encoding="utf-8-sig", errors="ignore", newline="")
+        should_close = True
+    else:
+        stream = io.StringIO(file_source.decode("utf-8-sig", errors="ignore"))
+        should_close = False
+
     try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-    except csv.Error:
-        dialect = csv.excel
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-    fieldnames = reader.fieldnames or []
-    rows = list(reader)
+        sample = stream.read(4096)
+        stream.seek(0)
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        except csv.Error:
+            dialect = csv.excel
+        reader = csv.DictReader(stream, dialect=dialect)
+        fieldnames = reader.fieldnames or []
+        rows = list(reader)
+    finally:
+        if should_close:
+            stream.close()
     text_col = _choose_text_column(
         [f for f in fieldnames if f],
         {f: [r.get(f) for r in rows[:500]] for f in fieldnames if f},
@@ -374,13 +389,18 @@ def _frame_records(frame: pd.DataFrame) -> list[dict]:
         records.append(record)
     return records
 
-def ingest_file(file_bytes: bytes, filename: str | None) -> list[dict]:
+def ingest_file(file_source: bytes | str | Path, filename: str | None) -> list[dict]:
     """Read a supported upload and return text records from its first sheet/column."""
     suffix = Path(filename or "").suffix.lower()
     if suffix == ".csv":
-        return ingest_csv(file_bytes)
+        return ingest_csv(file_source)
     if suffix in {".xls", ".xlsx"}:
         engine = "xlrd" if suffix == ".xls" else "openpyxl"
+        file_bytes = (
+            Path(file_source).read_bytes()
+            if isinstance(file_source, (str, Path))
+            else file_source
+        )
         try:
             frame = pd.read_excel(io.BytesIO(file_bytes), engine=engine)
         except Exception:

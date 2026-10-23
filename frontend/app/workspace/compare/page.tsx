@@ -9,10 +9,12 @@ import PulseTour, { type TourStep } from "@/components/PulseTour";
 import GlossaryModal, { type GlossaryItem } from "@/components/GlossaryModal";
 import { getResults } from "@/lib/api";
 import { normSub } from "@/lib/subreddits";
-import { CONFLICT_PALETTE, DIMENSION_KEYS, DIMENSION_LABELS, emotionShares, filterRecords, mean, round3, useRunData, type ScoredRecord } from "@/lib/analysisData";
+import { CONFLICT_PALETTE, DIMENSION_KEYS, DIMENSION_LABELS, UNCLASSIFIED, emotionShares, filterRecords, mean, round3, useRunData, type ScoredRecord } from "@/lib/analysisData";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import TrustPanel from "@/components/TrustPanel";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
+import SampleNotice from "@/components/SampleNotice";
+const MIN_GROUP_N = 30;
 const NEGATIVE = "#ef4e50";
 const POSITIVE = "#35c88d";
 const BLUE = "#08afd4";
@@ -24,13 +26,13 @@ const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
 const COMPARE_TOUR_STEPS: TourStep[] = [
     { target: "compare-polarity", title: "Polarity by subreddit", body: "One bar per community showing its average mood. Green bars lean positive, red bars lean negative, and the longer the bar the stronger the lean. The bars grow left or right from zero." },
     { target: "compare-sensitivity", title: "Sensitivity by subreddit", body: "The share of each community's comments dominated by anger or fear. A longer bar means a more emotionally charged community." },
-    { target: "compare-conflicts", title: "Conflict head-to-head", body: "The selected conflicts drawn on the same emotion radar so you can see how their reactions differ. The numbers underneath give each conflict's mean polarity, and which one feels worse." },
-    { target: "compare-fingerprint", title: "Subreddit fingerprint", body: "A small radar for every community: its emotional personality across the four Hourglass dimensions. Two communities with different shapes react in different ways." },
+    { target: "compare-conflicts", title: "Conflict head-to-head", body: "The selected conflicts are compared using sample averages and exploratory SenticNet-derived dimensions. No comparison here measures real-world severity or causation." },
+    { target: "compare-fingerprint", title: "Subreddit fingerprint", body: "A small radar for every community: its exploratory SenticNet-derived dimensions. Compare shapes cautiously because they are sample-based." },
 ];
 const COMPARE_GLOSSARY: GlossaryItem[] = [
     { term: "Subreddit", plain: "A Reddit community about a particular topic.", detail: "Each bar or fingerprint on this page is one subreddit found in your file." },
     { term: "Polarity", plain: "How positive or negative a comment is.", detail: "A score from -1 (very negative) to +1 (very positive). Around 0 is neutral." },
-    { term: "Mean polarity", plain: "The average mood of all comments in a group.", detail: "Below zero means the group leans negative overall. It is shown for each subreddit and each conflict." },
+    { term: "Mean polarity", plain: "The average polarity in a group.", detail: "Below zero means the sampled group leans negative. Small groups are flagged and should not be treated as reliable differences." },
     { term: "Diverging bar chart", plain: "Bars that grow left or right from a zero line.", detail: "Bars to the right are positive (green), bars to the left are negative (red)." },
     { term: "Hourglass of Emotions", plain: "An exploratory model with four dimensions.", detail: "Each comment is assigned a SenticNet-derived dimension from its text. These labels are not human-validated in this build." },
     { term: "Pleasantness", plain: "Joy vs sadness.", detail: "Is the person happy or upset?" },
@@ -40,7 +42,7 @@ const COMPARE_GLOSSARY: GlossaryItem[] = [
     { term: "Share", plain: "The percentage of comments that fall into a dimension.", detail: "A 40% Sensitivity share means four in ten comments in that group are mainly anger or fear." },
     { term: "Conflict", plain: "The topic a comment belongs to, such as Israel-Gaza or US-Iran.", detail: "Detected from your file's text. Selecting conflicts in the filters puts them head-to-head." },
     { term: "Head-to-head", plain: "Two or more conflicts compared on the same chart.", detail: "Overlapping coloured shapes on one radar make differences easy to spot." },
-    { term: "Feels worse", plain: "The conflict with the lowest mean polarity.", detail: "Only shown when more than one conflict is selected. It compares average tone, not the severity of real events." },
+    { term: "Lowest observed mean", plain: "The conflict with the lowest sample mean polarity.", detail: "Only shown when groups have at least 30 records and their approximate confidence intervals do not overlap. It is not a measure of real-world severity or causation." },
     { term: "Radar chart", plain: "A web-shaped chart with one axis per dimension.", detail: "The further a shape reaches along an axis, the bigger that dimension's share." },
     { term: "Fingerprint", plain: "A community's emotional signature.", detail: "The radar shape shows which emotions dominate that subreddit. Each small radar has its own scale, so compare shapes rather than sizes." },
     { term: "Records", plain: "The number of scored comments behind a figure.", detail: "Small groups give shakier results, so treat subreddits with few records with caution." },
@@ -49,8 +51,8 @@ const COMPARE_GLOSSARY: GlossaryItem[] = [
 const INFO: Record<"polarity" | "sensitivity" | "conflicts" | "fingerprint", InfoContent> = {
     polarity: { title: "Diverging polarity by subreddit", body: <>The <b>average mood</b> of each subreddit, from -1 (very negative) to +1 (very positive). Bars grow <b>right from zero for positive</b> communities (green) and <b>left for negative</b> ones (red), so you can see at a glance who is angrier and who is calmer.</> },
     sensitivity: { title: "Mean sensitivity by subreddit", body: <>The <b>share of each community&rsquo;s comments</b> whose dominant emotion is Sensitivity, meaning anger or fear. A longer bar means <b>more emotionally charged</b>. Hover a bar for the exact percentage and how many records it is based on.</> },
-    conflicts: { title: "Conflict head-to-head", body: <>The conflicts you selected, <b>drawn on one radar</b> across the four Hourglass dimensions. The figures beneath show each conflict&rsquo;s <b>mean polarity</b> and record count. When two or more are selected, <b>FEELS WORSE</b> names the one with the lowest mean polarity.</> },
-    fingerprint: { title: "Subreddit personality fingerprint", body: <>One small radar per subreddit showing the <b>share of its comments in each Hourglass dimension</b>. Think of it as the community&rsquo;s <b>emotional personality</b>. The polarity and record count sit under each name. Small communities give less reliable shapes.</> },
+    conflicts: { title: "Conflict head-to-head", body: <>The conflicts you selected, <b>drawn on one radar</b> across exploratory SenticNet-derived dimensions. The figures beneath show each conflict&rsquo;s <b>sample mean polarity</b>, record count and approximate confidence interval. A lowest observed mean is shown only when groups are sufficiently separated; it is not real-world severity.</> },
+    fingerprint: { title: "Subreddit dimension profile", body: <>One small radar per subreddit showing the <b>share among records with an available SenticNet-derived dimension</b>. These are exploratory profiles, not validated emotional personalities. The polarity and record count sit under each name.</> },
 };
 const PANEL_COLUMN: CSSProperties = { display: "flex", flexDirection: "column" };
 function HowToRead({ children, style }: {
@@ -64,17 +66,28 @@ type SubredditRow = {
     polarity: number;
     sensitivity: number;
     n: number;
+    ciLow: number | null;
+    ciHigh: number | null;
 };
 type ConflictStat = {
     name: string;
     polarity: number;
     n: number;
-    shares: Record<(typeof DIMENSION_KEYS)[number], number>;
+    shares: ReturnType<typeof emotionShares>;
+    ciLow: number | null;
+    ciHigh: number | null;
 };
+function confidenceInterval(values: number[]) {
+    if (values.length < 2)
+        return { low: null, high: null };
+    const meanValue = mean(values);
+    const margin = 1.96 * (Math.sqrt(values.reduce((sum, value) => sum + (value - meanValue) ** 2, 0) / (values.length - 1)) / Math.sqrt(values.length));
+    return { low: round3(meanValue - margin), high: round3(meanValue + margin) };
+}
 function CompareInner() {
     const phone = useMediaQuery("(max-width: 620px)");
     const { runId, resolving } = useActiveRun();
-    const { summary, records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error } = useRunData(runId, getResults);
+    const { summary, records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, loading, error, filterNotice } = useRunData(runId, getResults);
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     const detectedSubreddits = subredditOptions;
@@ -84,11 +97,14 @@ function CompareInner() {
         const base = filterRecords(records, filters, { subreddit: true });
         return activeSubreddits.map((name) => {
             const rows = base.filter((record: ScoredRecord) => normSub(record.subreddit) === normSub(name));
+            const interval = confidenceInterval(rows.map((record) => record.source_polarity));
             return {
                 name,
                 polarity: round3(mean(rows.map((record) => record.source_polarity))),
                 sensitivity: emotionShares(rows).sensitivity,
                 n: rows.length,
+                ciLow: interval.low,
+                ciHigh: interval.high,
             };
         }).filter((row) => row.n > 0);
     }, [activeSubreddits, records, filters]);
@@ -97,8 +113,9 @@ function CompareInner() {
         return filters.selectedConflicts
             .filter((name) => conflictOptions.includes(name))
             .map((name) => {
-            const rows = base.filter((record: ScoredRecord) => record.conflict === name);
-            return { name, polarity: round3(mean(rows.map((record) => record.source_polarity))), n: rows.length, shares: emotionShares(rows) };
+            const rows = base.filter((record: ScoredRecord) => (record.conflict ?? UNCLASSIFIED) === name);
+            const interval = confidenceInterval(rows.map((record) => record.source_polarity));
+            return { name, polarity: round3(mean(rows.map((record) => record.source_polarity))), n: rows.length, shares: emotionShares(rows), ciLow: interval.low, ciHigh: interval.high };
         })
             .filter((stat) => stat.n > 0);
     }, [records, filters, conflictOptions]);
@@ -112,7 +129,9 @@ function CompareInner() {
     const radarMax = Math.max(0.25, ...conflictStats.flatMap((stat) => DIMENSION_KEYS.map((dimension) => stat.shares[dimension])));
     const noSubredditsMessage = !records.length ? "No data loaded." : detectedSubreddits.length ? "No subreddit has comments in the current slice." : "No subreddit column was found in this analysis, so communities can't be compared.";
     const noConflictMessage = conflictOptions.length ? "No comments about the selected conflicts in the current slice." : "No conflict could be detected in this file's text, so conflicts can't be compared.";
-    const worst = conflictStats.length > 1 ? [...conflictStats].sort((a, b) => a.polarity - b.polarity)[0] : null;
+    const eligible = conflictStats.filter((stat) => stat.n >= MIN_GROUP_N && stat.ciLow !== null && stat.ciHigh !== null)
+        .sort((a, b) => a.polarity - b.polarity);
+    const worst = eligible.length > 1 && eligible[0].ciHigh! < eligible[1].ciLow! ? eligible[0] : null;
     const lastRefresh = summary?.trend_dates?.length ? summary.trend_dates[summary.trend_dates.length - 1] : null;
     const truncated = !!summary && summary.records_after_dedup > records.length;
     return (<div className="pulse-app timeline-app">
@@ -121,7 +140,7 @@ function CompareInner() {
         <div className="topbar">
           <span>
             <i className="live-dot"/> live build
-            {summary && <> · {summary.total_records.toLocaleString()} comments indexed</>}
+            {summary && <> · {summary.records_after_dedup.toLocaleString()} cleaned records · {summary.total_records.toLocaleString()} collected</>}
             {lastRefresh && <> · last refresh {lastRefresh}</>}
           </span>
           <span>
@@ -130,7 +149,7 @@ function CompareInner() {
         </div>
         <main className="dashboard-content timeline-content">
           <p className="eyebrow">04 · COMPARE</p>
-          <h1>Who feels what — and which conflict feels worse?</h1>
+          <h1>Who has which signals — and which sample mean is lowest?</h1>
           <p className="timeline-intro">
             Diverging polarity by subreddit, the conflicts found in your file on the same emotional canvas, and a personality fingerprint for each subreddit community.
           </p>
@@ -142,9 +161,11 @@ function CompareInner() {
           {tourOpen && <PulseTour steps={COMPARE_TOUR_STEPS} onClose={() => setTourOpen(false)}/>}
           {glossaryOpen && <GlossaryModal items={COMPARE_GLOSSARY} onClose={() => setGlossaryOpen(false)}/>}
 
-          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={detectedSubreddits} conflictOptions={conflictOptions}/>
+          <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={detectedSubreddits} conflictOptions={conflictOptions} filterNotice={filterNotice}/>
+          <SampleNotice summary={summary} recordsLength={records.length}/>
 
           {resolving || loading ? (<div className="timeline-chart-empty">Loading your data…</div>) : !runId ? (<NoAnalysisSelected />) : error ? (<div className="timeline-chart-empty">{error}</div>) : !records.length ? (<div className="timeline-chart-empty">This analysis has no scored comments.</div>) : (<>
+          <RevealPanel records={filtered} conflictStats={conflictStats} worst={worst} />
           {summary && <TrustPanel summary={summary}/>}
 
           <div className="compare-grid">
@@ -168,7 +189,7 @@ function CompareInner() {
               <div className="panel-heading">
                 <div>
                   <h2>Which communities sound most emotionally charged?</h2>
-                  <p>Share of each community's comments dominated by Sensitivity (anger / fear)</p>
+                  <p>Share with the Sensitivity exploratory dimension among records with an available dimension</p>
                 </div>
                 <InfoTip title={INFO.sensitivity.title}>{INFO.sensitivity.body}</InfoTip>
               </div>
@@ -176,7 +197,7 @@ function CompareInner() {
                 {subredditRows.length ? <SubredditBars data={subredditRows} metric="sensitivity"/> : <div className="timeline-chart-empty">{noSubredditsMessage}</div>}
               </div>
               <HowToRead style={{ marginTop: "auto" }}>
-                Each bar is the <b>percentage of a community&rsquo;s comments</b> that are mainly <b>anger or fear</b>. A <b>longer bar</b> = a more emotionally charged community. Compare it with the polarity chart: a community can be <b>negative but calm</b>, or <b>positive yet highly charged</b>.
+                Each bar is the <b>share of records with an available SenticNet-derived dimension</b> labelled Sensitivity. A <b>longer bar</b> is an exploratory signal, not a validated emotion or severity measure.
               </HowToRead>
             </section>
           </div>
@@ -197,7 +218,7 @@ function CompareInner() {
                 <InfoTip title={INFO.conflicts.title}>{INFO.conflicts.body}</InfoTip>
               </div>
             </div>
-            {conflictStats.length ? (<>
+            {conflictStats.length && conflictStats.some((stat) => stat.shares.known > 0) ? (<>
                 <div style={{ height: 380, padding: "10px 8px 4px" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={radarData} outerRadius={phone ? "54%" : "72%"}>
@@ -213,17 +234,18 @@ function CompareInner() {
                   {conflictStats.map((stat) => (<div key={stat.name}>
                       <span style={{ color: conflictColor(stat.name) }}>{stat.name}</span>
                       <strong>{signed(stat.polarity)}</strong>
-                      <small>mean polarity · {stat.n.toLocaleString()} records</small>
+                      <small>mean polarity · n={stat.n.toLocaleString()}{stat.ciLow !== null ? ` · 95% CI ${signed(stat.ciLow)} to ${signed(stat.ciHigh!)}` : ""}{stat.n < MIN_GROUP_N ? " · low sample" : ""}</small>
                     </div>))}
                   {worst && (<div>
-                      <span>FEELS WORSE</span>
+                      <span>LOWEST OBSERVED MEAN</span>
                       <strong style={{ color: NEGATIVE }}>{worst.name}</strong>
-                      <small>lowest mean polarity</small>
+                      <small>sample averages; intervals do not overlap</small>
                     </div>)}
+                  {!worst && conflictStats.length > 1 && <div><span>COMPARISON</span><strong>No clear difference at this sample size</strong><small>sample averages are not sufficiently separated</small></div>}
                 </div>
-              </>) : (<div className="timeline-chart-empty">{noConflictMessage}</div>)}
+              </>) : (<div className="timeline-chart-empty">{conflictStats.length && !conflictStats.some((stat) => stat.shares.known > 0) ? "Emotion dimensions are not available for this input (no SenticNet sentic vectors)" : noConflictMessage}</div>)}
             <HowToRead>
-              Each <b>corner</b> is one emotion dimension and each <b>coloured shape</b> is one conflict: the <b>further a shape reaches toward a corner</b>, the bigger that dimension&rsquo;s share of its comments. Where the shapes <b>differ</b> is where the conflicts feel different. The numbers above give each conflict&rsquo;s <b>mean polarity</b> (below zero = negative); <b>FEELS WORSE</b> is simply the lowest one.
+              Each <b>corner</b> is one exploratory SenticNet-derived dimension and each <b>coloured shape</b> is one conflict. The numbers above give each conflict&rsquo;s <b>sample mean polarity</b> and uncertainty; a lowest observed mean is not a measure of real-world severity.
             </HowToRead>
           </section>
 
@@ -262,13 +284,80 @@ function CompareInner() {
             {!subredditRows.length && <div className="timeline-chart-empty">{noSubredditsMessage}</div>}
             <p className="chart-note">Values are computed from the scored records of your uploaded file{truncated ? ` (an evenly spaced sample of ${records.length.toLocaleString()} of ${summary?.records_after_dedup.toLocaleString()} unique records)` : ""}, so treat small subreddits with caution.</p>
             <HowToRead>
-              Each card is <b>one subreddit&rsquo;s emotional personality</b>. The <b>four corners</b> are Pleasantness, Attention, Sensitivity and Aptitude; the <b>gold shape</b> stretches toward the emotions that dominate that community. Look at the <b>shape</b>, not the size: <b>each card has its own scale</b>. Polarity and record count sit under the name; <b>few records = less reliable</b>.
+              Each card is one subreddit&rsquo;s exploratory SenticNet-derived dimension profile. Look at the <b>shape</b>, not the size: <b>each card has its own scale</b>. Polarity and record count sit under the name; <b>few records = less reliable</b>.
             </HowToRead>
           </section>
           </>)}
         </main>
       </div>
     </div>);
+}
+function RevealPanel({ records, conflictStats, worst }: {
+    records: ScoredRecord[];
+    conflictStats: ConflictStat[];
+    worst: ConflictStat | null;
+}) {
+    const [revealed, setRevealed] = useState(false);
+    const charged = useMemo(() => {
+        const bySubreddit = new Map<string, ScoredRecord[]>();
+        records.forEach((record) => {
+            const name = record.subreddit?.trim() || "Unlabelled community";
+            bySubreddit.set(name, [...(bySubreddit.get(name) ?? []), record]);
+        });
+        return Array.from(bySubreddit.entries())
+            .map(([name, rows]) => ({ name, rows, sensitivity: emotionShares(rows).sensitivity }))
+            .sort((a, b) => b.sensitivity - a.sensitivity)[0] ?? null;
+    }, [records]);
+    const focus = worst ?? conflictStats[0] ?? null;
+    const example = useMemo(() => {
+        if (!focus)
+            return null;
+        return records
+            .filter((record) => record.conflict === focus.name)
+            .sort((a, b) => a.source_polarity - b.source_polarity)[0] ?? null;
+    }, [focus, records]);
+    if (!focus || !charged)
+        return null;
+    const gap = charged.sensitivity - (focus.shares.sensitivity ?? 0);
+    return (<section className={`reveal-panel${revealed ? " is-revealed" : ""}`} aria-labelledby="reveal-title">
+      <div className="reveal-copy">
+        <p className="reveal-kicker">THE 10-SECOND REVEAL</p>
+        <h2 id="reveal-title">
+          {worst ? <><span>{focus.name}</span> has the lowest observed sample mean.</> : <>The signal has a shape.</>}
+        </h2>
+        <p className="reveal-lede">
+          {charged.name} has the highest sampled Sensitivity share. {worst ? `${focus.name} has the lowest clearly separated sampled mean polarity.` : "The displayed sample does not show a clear lowest mean at this sample size."}
+          <b> Those are different signals.</b>
+        </p>
+        <button type="button" className="reveal-button" onClick={() => setRevealed((current) => !current)} aria-expanded={revealed}>
+          {revealed ? "HIDE THE EVIDENCE" : "SHOW ME THE EVIDENCE"} <span aria-hidden="true">↗</span>
+        </button>
+      </div>
+      <div className="reveal-stat-grid">
+        <div className="reveal-stat reveal-stat-negative">
+          <span>LOWEST POLARITY</span>
+          <strong>{focus.polarity >= 0 ? "+" : ""}{focus.polarity.toFixed(3)}</strong>
+          <small>{focus.name} · {focus.n.toLocaleString()} records</small>
+        </div>
+        <div className="reveal-stat reveal-stat-charged">
+          <span>MOST CHARGED</span>
+          <strong>{Math.round(charged.sensitivity * 100)}%</strong>
+          <small>{charged.name} · sensitivity share</small>
+        </div>
+      </div>
+      {revealed && (<div className="reveal-evidence">
+        <div>
+          <span className="reveal-evidence-label">WHAT THE MODEL FOUND</span>
+          <p>{Math.abs(gap) < 0.01 ? "The two signals are almost aligned in this slice." : `${charged.name} has ${Math.round(Math.abs(gap) * 100)} percentage points more Sensitivity than ${focus.name}. A community can sound more emotionally charged without having the lowest overall tone.`}</p>
+        </div>
+        {example && (<blockquote>
+          <span className="reveal-evidence-label">ONE RECORD TO CHECK</span>
+          “{example.text.trim().length > 220 ? `${example.text.trim().slice(0, 217)}…` : example.text.trim()}”
+          <small>{example.conflict} · polarity {example.source_polarity >= 0 ? "+" : ""}{example.source_polarity.toFixed(3)}</small>
+        </blockquote>)}
+        <p className="reveal-boundary">This is a lead, not a verdict. Open the source records and check the context before making a claim.</p>
+      </div>)}
+    </section>);
 }
 function SubredditBars({ data, metric }: {
     data: SubredditRow[];
@@ -305,7 +394,8 @@ function BarTooltip({ active, payload, metric }: {
       <span className="chart-tooltip-value">
         {metric} : {metric === "sensitivity" ? pct(payload[0].value) : payload[0].value.toFixed(3)}
       </span>
-      {row.n !== null && <span className="chart-tooltip-value">records : {row.n.toLocaleString()}</span>}
+        {row.n !== null && <span className="chart-tooltip-value">records : {row.n.toLocaleString()}{row.n < MIN_GROUP_N ? " · low sample" : ""}</span>}
+        {metric === "polarity" && row.ciLow !== null && <span className="chart-tooltip-value">95% CI : {signed(row.ciLow)} to {signed(row.ciHigh!)}</span>}
     </div>);
 }
 function RadarTooltip({ active, payload, label }: {

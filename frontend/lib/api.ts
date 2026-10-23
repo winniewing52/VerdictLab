@@ -3,6 +3,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE
 const SESSION_TOKEN_KEY = "pulse_session_token";
 const LAST_RUN_KEY = "pulse_last_run";
 const RETENTION_PREF_KEY = "verdictlab.privacy.retention";
+export const DEMO_SNAPSHOT_ID = "A-10ecee17";
 function authHeader(): Record<string, string> {
     if (typeof window === "undefined")
         return {};
@@ -53,13 +54,14 @@ export type AnalysisResults = {
             neutral: number;
             negative: number;
         };
-        avg_vader_score: number;
-        avg_textblob_score: number;
+        avg_vader_score: number | null;
+        avg_textblob_score: number | null;
         avg_source_polarity?: number;
         top_conflict?: string;
         dominant_emotion?: string;
         most_volatile_day?: string;
         most_volatile_spread?: number;
+        most_volatile_n?: number;
         top_topics: string[];
         quality_score: number | null;
         data_quality?: {
@@ -67,6 +69,7 @@ export type AnalysisResults = {
             records_after_dedup: number;
             dedup_rate_pct: number;
             interpretation: string;
+            removed_by_reason?: Record<string, number>;
         };
         polarity_trend?: number[];
         trend_dates?: string[];
@@ -84,12 +87,16 @@ export type AnalysisResults = {
         }>>;
         scoring?: {
             senticnet_usable_pct: number;
-            mean_concept_coverage_pct: number;
+            mean_concept_coverage_pct: number | null;
+            records_scored_by_senticnet?: number;
+            records_precomputed?: number;
             records_vader_fallback: number;
             min_coverage_threshold_pct: number;
         };
+        stored_sample_size?: number;
         trust_benchmark?: {
             labelled_records: number;
+            agreement_pct?: number;
             accuracy_pct: {
                 senticnet: number;
                 vader: number;
@@ -107,7 +114,7 @@ export type AnalysisResults = {
         };
         evaluation?: {
             status: "not_configured" | "configured";
-            message?: string;
+            message: string;
         };
         privacy?: {
             mode: "redacted" | "raw";
@@ -123,7 +130,7 @@ export type AnalysisResults = {
     result_records: {
         text: string;
         vader_score: number;
-        textblob_score: number;
+        textblob_score: number | null;
         source_polarity: number;
         source_label?: string;
         event_date?: string;
@@ -171,14 +178,14 @@ export async function startAnalysis(params: {
         form.append("retention_days", String(retention));
     const controller = new AbortController();
     // Free hosted instances may need time to wake before accepting a larger upload.
-    const timeout = window.setTimeout(() => controller.abort(), 120000);
+    const timeout = window.setTimeout(() => controller.abort(), 2 * 60 * 60 * 1000);
     let res: Response;
     try {
         res = await fetch(`${API_BASE}/analyses`, { method: "POST", body: form, headers: authHeader(), signal: controller.signal });
     }
     catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-            throw new Error("The analysis service did not respond within 2 minutes. The hosted service may be waking up; please try again.");
+            throw new Error("The upload service did not respond within 2 hours. Check your connection and try again.");
         }
         throw new Error("The hosted analysis service is unavailable. Please try again in a moment.");
     }
@@ -192,12 +199,20 @@ export async function startAnalysis(params: {
     return created;
 }
 export async function getAnalysis(id: string): Promise<Analysis> {
+    if (id === DEMO_SNAPSHOT_ID) {
+        const snapshot = await fetch("/demo-snapshot/analysis.json", { cache: "force-cache" });
+        if (snapshot.ok)
+            return snapshot.json();
+    }
     const res = await fetch(`${API_BASE}/analyses/${id}`, { cache: "no-store", headers: authHeader() });
     if (!res.ok)
         throw new AccountError(await res.text(), res.status);
     return res.json();
 }
 export async function getDemoSample(): Promise<Analysis> {
+    const snapshot = await fetch("/demo-snapshot/analysis.json", { cache: "force-cache" });
+    if (snapshot.ok)
+        return snapshot.json();
     const res = await fetch(`${API_BASE}/analyses/demo/sample`, { cache: "no-store" });
     if (!res.ok)
         throw new AccountError(await res.text(), res.status);
@@ -242,6 +257,17 @@ export async function evaluateSentiment(params: {
     return res.json();
 }
 export async function getResults(id: string): Promise<AnalysisResults> {
+    if (id === DEMO_SNAPSHOT_ID) {
+        const [response, sampleResponse] = await Promise.all([
+            fetch("/demo-snapshot/results.json", { cache: "force-cache" }),
+            fetch("/demo-snapshot/explorer-sample.json", { cache: "force-cache" }),
+        ]);
+        if (response.ok && sampleResponse.ok) {
+            const results: AnalysisResults = await response.json();
+            const sample: { records: AnalysisResults["result_records"] } = await sampleResponse.json();
+            return { ...results, result_records: sample.records };
+        }
+    }
     const res = await fetch(`${API_BASE}/analyses/${id}/results`, { cache: "no-store", headers: authHeader() });
     if (!res.ok)
         throw new AccountError(await res.text(), res.status);
@@ -251,6 +277,11 @@ export async function getReport(id: string): Promise<{
     id: string;
     report_markdown: string;
 }> {
+    if (id === DEMO_SNAPSHOT_ID) {
+        const snapshot = await fetch("/demo-snapshot/report.json", { cache: "force-cache" });
+        if (snapshot.ok)
+            return snapshot.json();
+    }
     const res = await fetch(`${API_BASE}/analyses/${id}/report`, { cache: "no-store", headers: authHeader() });
     if (!res.ok)
         throw new AccountError(await res.text(), res.status);
@@ -522,8 +553,8 @@ export type LiveResult = {
         attention: number;
         sensitivity: number;
         aptitude: number;
-    };
-    dominant_emotion: "pleasantness" | "attention" | "sensitivity" | "aptitude";
+    } | null;
+    dominant_emotion: "pleasantness" | "attention" | "sensitivity" | "aptitude" | null;
     label: "positive" | "neutral" | "negative";
     coverage_pct: number;
     coverage_threshold_pct: number;

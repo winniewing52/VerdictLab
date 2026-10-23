@@ -108,8 +108,11 @@ export default function Hero() {
             <Link href="/workspace/access?source=csv" className="inline-flex h-10 items-center border border-[#2a2a2c] px-4 font-['Space_Mono',ui-monospace,monospace] text-[13px] text-[#d6d2c6] transition hover:border-[#55555a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
               Upload CSV / XLSX
             </Link>
-            <Link href="/demo" className="inline-flex h-10 items-center border border-signal/40 bg-signal/10 px-4 font-['Space_Mono',ui-monospace,monospace] text-[13px] text-signal transition hover:bg-signal/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
-              View sample analysis
+            <Link href="/demo/pulse" className="inline-flex h-10 items-center border border-signal/40 bg-signal/10 px-4 font-['Space_Mono',ui-monospace,monospace] text-[13px] text-signal transition hover:bg-signal/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
+              Try the guided demo
+            </Link>
+            <Link href="/mds05" className="inline-flex h-10 items-center border border-[#8b6a22] bg-[#2a210e] px-4 font-['Space_Mono',ui-monospace,monospace] text-[13px] text-[#f0ae2a] transition hover:bg-[#3a2d12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-signal">
+              MDS05 event overview
             </Link>
           </div>
 

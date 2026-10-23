@@ -1,0 +1,13 @@
+import Mds05EventShell, { EventButton, EventCard } from "@/components/Mds05EventShell";
+import { MDS05_FINDINGS } from "@/lib/mds05Findings";
+
+export default function Mds05FindingsPage() {
+  return <Mds05EventShell active="Findings" eyebrow="01 · FINDINGS" title="What did the study find?" intro="The same public conversation can receive different sentiment interpretations depending on the tool used.">
+    <div className="mds05-two-column">
+      <EventCard className="mds05-highlight-card"><span className="mds05-card-kicker">MODEL AGREEMENT</span><strong className="mds05-big-number">{MDS05_FINDINGS.modelAgreementPct}%</strong><p>of Reddit comments received the same positive, neutral, or negative category from SenticNet and VADER.</p><small>Disagreement is a signal to investigate—not proof that either tool is correct.</small></EventCard>
+      <EventCard><span className="mds05-card-kicker">PROVIDED-LABEL SAMPLE · n = 1,000</span><h2>How often did each tool match the supplied labels?</h2><div className="mds05-bars"><div><b>VADER</b><i><em style={{width:"100%"}}/></i><strong>{MDS05_FINDINGS.vaderHumanMatchPct}%</strong></div><div><b>SenticNet</b><i><em className="cyan" style={{width:"72%"}}/></i><strong>{MDS05_FINDINGS.senticNetHumanMatchPct}%</strong></div></div><p className="mds05-muted">Exact category match on the supplied-label evaluation sample. Its source and annotation protocol must be documented before describing it as independent human validation.</p></EventCard>
+    </div>
+    <EventCard className="mds05-benchmark-card"><span className="mds05-card-kicker">INDEPENDENT REFERENCE · TWEETEVAL TEST SPLIT · n = 12,284</span><h2>Same direction on a published benchmark</h2><p>On the official TweetEval sentiment test split, SenticNet reached {MDS05_FINDINGS.tweetEvalSenticNetAccuracyPct}% accuracy (95% CI {MDS05_FINDINGS.tweetEvalSenticNetAccuracyCi}) and VADER reached {MDS05_FINDINGS.tweetEvalVaderAccuracyPct}% (95% CI {MDS05_FINDINGS.tweetEvalVaderAccuracyCi}).</p><small>Fixed thresholds; no test-set tuning. The benchmark is a reference comparison, not a claim that either model represents global public opinion.</small></EventCard>
+    <EventCard className="mds05-interpretation"><span className="mds05-card-kicker">WHAT THIS MEANS</span><h2>Our contribution is transparency, not a claim that one tool is always right.</h2><p>Conflict language includes grief, anger, negation, slogans, irony, and missing context. A responsible system should expose uncertainty and help researchers decide what deserves a closer human read.</p><EventButton href="/mds05/evidence">See the evidence behind the result →</EventButton></EventCard>
+  </Mds05EventShell>;
+}

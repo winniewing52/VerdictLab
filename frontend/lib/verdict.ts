@@ -100,8 +100,8 @@ export function buildVerdict(analysis: Analysis, results: AnalysisResults): Verd
             : tone === "neutral"
                 ? "In plain English: most comments are factual and carry little emotional charge."
                 : "In plain English: supportive and critical voices are close to evenly matched.";
-    const polarity = summary.avg_source_polarity ?? summary.avg_textblob_score;
-    const vader = summary.avg_vader_score;
+    const polarity = summary.avg_source_polarity ?? summary.avg_textblob_score ?? 0;
+    const vader = summary.avg_vader_score ?? 0;
     const gap = Math.abs(polarity - vader);
     const sign = (n: number) => (Math.abs(n) < 0.05 ? 0 : Math.sign(n));
     const agree = sign(polarity) === sign(vader) || gap < 0.15;

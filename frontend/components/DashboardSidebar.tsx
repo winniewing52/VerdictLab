@@ -62,7 +62,8 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
     runId?: string | null;
 }) {
     const router = useRouter();
-    const demoMode = isDemoPath(usePathname());
+    const pathname = usePathname();
+    const demoMode = isDemoPath(pathname);
     const open = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
     const setOpen = (next: boolean) => setSidebarOpen(next, !isMobile());
     const closeOnMobile = () => {
@@ -94,11 +95,28 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
         return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKey); };
     }, [open]);
     const root = demoMode ? "/demo" : "/workspace";
+    const demoSteps = [
+        { match: root, label: "Overview", href: root, note: "Start with the headline signal and the charts behind it." },
+        { match: `${root}/timeline`, label: "Timeline", href: `${root}/timeline`, note: "See when the conversation changed." },
+        { match: `${root}/compare`, label: "Compare", href: `${root}/compare`, note: "Compare communities and conflict signals." },
+        { match: `${root}/explorer`, label: "Evidence", href: `${root}/explorer`, note: "Open the records behind the charts." },
+        { match: `${root}/live`, label: "Live text", href: `${root}/live`, note: "Try your own sentence; the backend may be required." },
+    ];
+    const demoStep = demoSteps.findIndex((item) => pathname === item.match);
+    function resetDemo() {
+        try {
+            window.sessionStorage.clear();
+        }
+        catch {
+        }
+        router.push("/demo");
+    }
     const link = (segment: string) => {
         const path = segment ? `${root}/${segment}` : root;
         return !demoMode && runId ? `${path}?run=${encodeURIComponent(runId)}` : path;
     };
     const navigation = [
+        { label: "Summary", icon: "agreement", href: link("summary") },
         { label: "Pulse", icon: "pulse", href: link("") },
         { label: "Timeline", icon: "timeline", href: link("timeline") },
         { label: "Emotions", icon: "emotions", href: link("emotions") },
@@ -129,6 +147,14 @@ export default function DashboardSidebar({ active = "Pulse", runId }: {
       <span>{item.label}</span>
     </NavItem>));
     return <>
+    {demoMode && demoStep >= 0 && <div className="demo-dashboard-guide">
+      <span><b>Guided demo</b> · Step {demoStep + 1} of {demoSteps.length} · {demoSteps[demoStep].label} — {demoSteps[demoStep].note}</span>
+      <div>
+        {demoStep < demoSteps.length - 1 && <Link href={demoSteps[demoStep + 1].href}>Next →</Link>}
+        <button type="button" onClick={resetDemo}>Reset demo</button>
+        <Link href="/demo/guide">Skip guide</Link>
+      </div>
+    </div>}
     {!open && (<div className="mobile-bar">
         <button className="sidebar-open-button" type="button" onClick={() => setOpen(true)} aria-label="Open navigation" aria-expanded={false}><NavGlyph name="menu"/></button>
         <span className="mobile-bar-brand" aria-hidden="true"><b>VL</b> VerdictLab</span>

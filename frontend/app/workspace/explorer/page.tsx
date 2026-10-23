@@ -5,11 +5,12 @@ import AnalysisFilters from "@/components/AnalysisFilters";
 import InfoTip, { type InfoContent } from "@/components/InfoTip";
 import PulseTour, { type TourStep } from "@/components/PulseTour";
 import GlossaryModal, { type GlossaryItem } from "@/components/GlossaryModal";
-import { getResults } from "@/lib/api";
+import { DEMO_SNAPSHOT_ID, getResults } from "@/lib/api";
 import { useActiveRun } from "@/lib/useActiveRun";
 import { dataDateSpan, filterRecords, useRunData, type ScoredRecord } from "@/lib/analysisData";
 import { countKinds, kindOf, recordNouns, type RecordKind } from "@/lib/recordKind";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
+import SampleNotice from "@/components/SampleNotice";
 type ResultRecord = ScoredRecord;
 type SortKey = "date" | "upvotes" | "polarity";
 type SortDir = "asc" | "desc";
@@ -31,7 +32,7 @@ const EXPLORER_GLOSSARY: GlossaryItem[] = [
     { term: "Conflict", plain: "The topic a row belongs to, such as Israel-Gaza or US-Iran.", detail: "Detected from the text." },
     { term: "Score", plain: "How many people agreed with or amplified it.", detail: "Upvotes on Reddit, likes elsewhere. A high number means it was widely seen or supported. A dash means the file had no score data." },
     { term: "Polarity", plain: "How positive or negative the text is.", detail: "A score from -1 (very negative) to +1 (very positive). Around 0 is neutral. Green means positive, red means negative." },
-    { term: "Emotion", plain: "The dominant feeling in the text.", detail: "One of the four Hourglass of Emotions dimensions, shown with a small icon." },
+    { term: "Dimension", plain: "A SenticNet-derived exploratory dimension in the text.", detail: "One of the four Hourglass dimensions, shown with a small icon when available." },
     { term: "Hourglass of Emotions", plain: "A model that describes feelings along four dimensions.", detail: "Pleasantness (joy vs sadness), Attention (interest vs surprise), Sensitivity (fear and anger) and Aptitude (trust vs disgust)." },
     { term: "Sort", plain: "Re-ordering the table by a column.", detail: "Click a header once for high-to-low, click again for low-to-high. The arrow shows the current direction." },
     { term: "Page", plain: "One screenful of 25 rows.", detail: "Use Prev and Next to move between pages. The heading shows which page you are on." },
@@ -39,7 +40,7 @@ const EXPLORER_GLOSSARY: GlossaryItem[] = [
     { term: "BibTeX", plain: "A standard format for academic citations.", detail: "Gives you a ready-to-paste reference describing this corpus, including the number of rows and the date range." },
 ];
 const INFO: Record<"export" | "table", InfoContent> = {
-    export: { title: "Export", body: <><b>CSV</b> downloads <b>every row in the current slice</b> (not just the visible page) with date, type, subreddit, conflict, text, score, polarity and emotion. <b>BibTeX</b> downloads a citation entry describing the corpus, including the row count and date range. Both follow your filters.</> },
+    export: { title: "Export", body: <><b>CSV</b> downloads <b>every stored row in the current slice</b> (not just the visible page) with date, type, subreddit, conflict, stored display text, score, polarity and dimension. Stored display text may be redacted and truncated to 500 characters. <b>BibTeX</b> downloads a citation entry describing the stored slice, including the row count and date range.</> },
     table: { title: "Table", body: <>Every <b>scored post or comment</b> in the current slice, 25 per page. Columns: date, type, subreddit, conflict, the text, score, polarity (<b>green</b> positive, <b>red</b> negative) and dominant emotion. <b>Sort</b> by date, score or polarity using the column headers, and hover the text to read it in full.</> },
 };
 const PANEL_COLUMN: CSSProperties = { display: "flex", flexDirection: "column" };
@@ -84,7 +85,7 @@ function download(filename: string, content: string, mime: string) {
 }
 function ExplorerInner() {
     const { runId, resolving } = useActiveRun();
-    const { summary, records, filters, setFilters, defaults, conflictOptions, subredditOptions: detectedSubreddits, kindCounts, loading, error } = useRunData(runId, getResults);
+    const { summary, records, filters, setFilters, defaults, conflictOptions, subredditOptions: detectedSubreddits, kindCounts, loading, error, filterNotice } = useRunData(runId, getResults);
     const [sortKey, setSortKey] = useState<SortKey>("date");
     const [sortDir, setSortDir] = useState<SortDir>("desc");
     const [page, setPage] = useState(0);
@@ -153,7 +154,7 @@ function ExplorerInner() {
         <div className="topbar">
           <span>
             <i className="live-dot"/> live build
-            {summary && <> · {summary.total_records.toLocaleString()} {allNouns.plural} indexed</>}
+            {summary && <> · {summary.records_after_dedup.toLocaleString()} cleaned records · {summary.total_records.toLocaleString()} collected</>}
             {lastRefresh && <> · last refresh {lastRefresh}</>}
           </span>
           <span>
@@ -164,9 +165,9 @@ function ExplorerInner() {
           <div className="explorer-head">
             <div>
               <p className="eyebrow">05 · EXPLORER</p>
-              <h1>The corpus, row by row</h1>
+              <h1>Stored records, row by row</h1>
               <p className="timeline-intro">
-                Drill into individual scored {allNouns.plural} from your uploaded file or link. Filter by type to separate thread starters from replies, sort by polarity to find the loudest voices, or by score to find the most-amplified ones. Export to CSV for further analysis or to BibTeX for academic citation.
+                Drill into stored scored {allNouns.plural} from your uploaded file or link. Keyword search and CSV export use stored display text, which may be redacted and truncated to 500 characters. Filter by type to separate thread starters from replies, sort by polarity to find the loudest voices, or by score to find the most-amplified ones.
               </p>
             </div>
             <div className="explorer-actions" data-tour="explorer-export" style={{ alignItems: "center" }}>
@@ -183,13 +184,15 @@ function ExplorerInner() {
           {tourOpen && <PulseTour steps={EXPLORER_TOUR_STEPS} onClose={() => setTourOpen(false)}/>}
           {glossaryOpen && <GlossaryModal items={EXPLORER_GLOSSARY} onClose={() => setGlossaryOpen(false)}/>}
 
-          <AnalysisFilters filters={filters} onChange={setFilters} subredditOptions={detectedSubreddits} defaults={defaults} conflictOptions={conflictOptions} kindCounts={kindCounts}/>
+          <AnalysisFilters filters={filters} onChange={setFilters} subredditOptions={detectedSubreddits} defaults={defaults} conflictOptions={conflictOptions} kindCounts={kindCounts} filterNotice={filterNotice}/>
+          <SampleNotice summary={summary} recordsLength={records.length}/>
 
           {!resolving && !loading && !runId ? (<NoAnalysisSelected />) : (<section className="panel explorer-panel" data-tour="explorer-table" style={PANEL_COLUMN}>
             <div className="panel-heading">
               <div>
                 <h2>{filtered.length.toLocaleString()} {nouns.plural} in this slice</h2>
-                <p>{hasRecords ? `Page ${currentPage + 1} of ${pageCount}` : "No data loaded"}</p>
+                <p>{hasRecords ? `Page ${currentPage + 1} of ${pageCount} · ${records.length.toLocaleString()} shown of ${summary?.records_after_dedup.toLocaleString() ?? records.length.toLocaleString()} cleaned records (${summary?.total_records.toLocaleString() ?? records.length.toLocaleString()} collected)` : "No data loaded"}</p>
+                {runId === DEMO_SNAPSHOT_ID && <p className="demo-sample-note">Offline demo sample: {records.length.toLocaleString()} records from {summary?.total_records.toLocaleString() ?? "the full"}.</p>}
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 <div className="explorer-pager" data-tour="explorer-pager">
@@ -231,7 +234,7 @@ function ExplorerInner() {
                 </table>
               </div>)}
             <HowToRead style={{ marginTop: "auto" }}>
-              Each <b>row is one {nouns.singular}</b>{hasKinds && <>, tagged <b>POST</b> (starts a discussion) or <b>COMMENT</b> (a reply). Use the <b>TYPE</b> filter above to look at one kind</>}. <b>Polarity</b> runs from -1 to +1: <b>green</b> = positive, <b>red</b> = negative, and the icon beside <b>emotion</b> shows its dominant feeling. Click <b>DATE</b>, <b>SCORE</b> or <b>POLARITY</b> to sort, hover the text to read it in full, use <b>Prev / Next</b> to page through, and use <b>CSV</b> or <b>BibTeX</b> at the top to export everything in this slice.
+              Each <b>row is one {nouns.singular}</b>{hasKinds && <>, tagged <b>POST</b> (starts a discussion) or <b>COMMENT</b> (a reply). Use the <b>TYPE</b> filter above to look at one kind</>}. <b>Polarity</b> runs from -1 to +1: <b>green</b> = positive, <b>red</b> = negative, and the icon beside <b>dimension</b> shows an exploratory SenticNet-derived dimension when available. Click <b>DATE</b>, <b>SCORE</b> or <b>POLARITY</b> to sort, hover the text to read it in full, use <b>Prev / Next</b> to page through, and use <b>CSV</b> or <b>BibTeX</b> at the top to export everything in this slice.
             </HowToRead>
           </section>)}
         </main>

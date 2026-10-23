@@ -22,7 +22,9 @@ The project is designed for two audiences:
 
 - Analyze public **Reddit** conversations from a Reddit URL.
 - Analyze **YouTube comments** when a YouTube Data API key is configured.
-- Upload **CSV, XLS, or XLSX** files containing text records.
+- Upload **CSV, XLS, or XLSX** files containing text records. CSV uploads are
+  copied to server-side temporary storage in chunks, so large files do not have
+  to fit in application memory; multi-gigabyte uploads can take a while.
 - Compare SenticNet, VADER, and TextBlob sentiment signals.
 - Explore:
   - a summary dashboard and report
@@ -82,8 +84,13 @@ To stop the application, press `Ctrl+C` in the terminal running `start.sh`.
    - a YouTube URL
    - an uploaded CSV/XLS/XLSX file.
 5. Wait for ingestion and analysis to finish.
-6. Use the timeline, emotions, compare, Explorer, and report views to inspect
-   the results.
+6. For the clearest demo story, open **Compare** first. The **10-second
+   reveal** separates the lowest average polarity from the most emotionally
+   charged community, then expands to a representative source record and the
+   next human check. Use the charts and Explorer to investigate that lead
+   rather than treating it as an automatic verdict.
+7. Use the timeline, emotions, Compare, Explorer, and report views to inspect
+   the remaining results.
 
 #### Verification codes in local development
 
@@ -278,6 +285,22 @@ The validation endpoint accepts a CSV, XLS, or XLSX file containing a text
 column and a human label column. It requires at least 100 valid rows and
 reports accuracy, macro-F1, per-class precision/recall/F1, a confusion matrix,
 skipped rows, and deterministic bootstrap 95% confidence intervals.
+
+The MDS05 showcase keeps two evidence sources separate:
+
+- The 1,000-record evaluation sample reports exact category matches for the
+  supplied labels. Its dataset source, label definitions, sampling procedure,
+  and annotation protocol must be stated in the accompanying project report.
+  Until those details are documented, do not describe this sample as
+  independent human validation or as a representative survey.
+- The official TweetEval sentiment test split is a published reference
+  benchmark. The committed result is 12,284 records: SenticNet accuracy 36.9%
+  (95% CI 36.1–37.8%) and VADER accuracy 54.5% (95% CI 53.6–55.4%).
+
+These results are evidence about the evaluated datasets, not proof that either
+tool is always correct or that online comments represent global public opinion.
+SenticNet-derived affective dimensions in the production dashboard are
+exploratory indicators, not validated emotion labels.
 
 For a reproducible benchmark:
 

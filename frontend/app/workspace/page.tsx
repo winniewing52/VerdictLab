@@ -11,12 +11,13 @@ import GlossaryModal from "@/components/GlossaryModal";
 import ExportMenu from "@/components/ExportMenu";
 import { AccountError, clearLastRunId, deleteAnalysis, getAnalysis, getReport, getResults, setLastRunId, type Analysis, type AnalysisResults } from "@/lib/api";
 import { useActiveRun } from "@/lib/useActiveRun";
-import { DIMENSION_KEYS, DIMENSION_LABELS, type DimensionKey, dailySeries, dominantEmotion, emotionShares, formatDate, mean, mostVolatileDay, sentimentBreakdown, topConflict, useSliceFilters } from "@/lib/analysisData";
+import { DIMENSION_KEYS, DIMENSION_LABELS, type DimensionKey, dailySeries, detectScale, dominantEmotion, emotionShares, formatDate, mean, mostVolatileDay, sentimentBreakdown, topConflict, useSliceFilters } from "@/lib/analysisData";
 import { countKinds, kindOf, recordNouns } from "@/lib/recordKind";
 import PostsVsComments from "@/components/PostsVsComments";
 import { isDemoPath } from "@/lib/demo";
 import NoAnalysisSelected from "@/components/NoAnalysisSelected";
 import ShareDashboard from "@/components/ShareDashboard";
+import SampleNotice from "@/components/SampleNotice";
 function WorkspaceInner() {
     const router = useRouter();
     const { runId, resolving, error: resolveError, retry } = useActiveRun();
@@ -46,10 +47,17 @@ function WorkspaceInner() {
                 setError(null);
                 setLastRunId(analysisId);
                 if (current.status === "complete") {
-                    const [nextResults, nextReport] = await Promise.all([getResults(analysisId), getReport(analysisId)]);
-                    if (!stopped) {
+                    const nextResults = await getResults(analysisId);
+                    if (!stopped)
                         setResults(nextResults);
-                        setReport(nextReport.report_markdown);
+                    try {
+                        const nextReport = await getReport(analysisId);
+                        if (!stopped)
+                            setReport(nextReport.report_markdown);
+                    }
+                    catch (reportError) {
+                        if (!stopped)
+                            setError(reportError instanceof Error ? reportError.message : "Could not load the analysis report.");
                     }
                 }
                 else if (current.status !== "failed") {
@@ -92,11 +100,11 @@ function WorkspaceInner() {
       <DashboardSidebar runId={runId}/>
       <div className="dashboard-shell">
         <main className="dashboard-content">
-          <p className="eyebrow">01 · PULSE / DECISION SUPPORT</p>
+          <p className="eyebrow">MDS05 · EDUCATION / RESEARCH TRACK</p>
           <div className="page-head">
             <div>
-              <h1>Know what changed. Know what to check next.</h1>
-              <p className="dashboard-subtitle">VerdictLab helps researchers, journalists, policy teams, and moderators decide what deserves human attention in a public conversation—not just whether the tone is positive or negative.</p>
+              <h1>Conflict sentiment analysis</h1>
+              <p className="dashboard-subtitle">A plain-language view of what we studied, what we found, and where automated sentiment needs human review.</p>
             </div>
             <div className="page-head-actions">
                 <ShareDashboard />
@@ -126,19 +134,17 @@ function WorkspaceInner() {
 function PulseIdle({ children }: {
     children: ReactNode;
 }) {
-    const { filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts } = useSliceFilters(null);
+    const { filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts, filterNotice } = useSliceFilters(null);
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     return <>
-    <DashboardGuide />
-    <div className="pulse-toolbar">
-      <button type="button" className="tour-trigger" onClick={() => setTourOpen(true)}>▶ TAKE THE 60-SECOND TOUR</button>
-      <button type="button" className="glossary-trigger" onClick={() => setGlossaryOpen(true)}>📖 GLOSSARY</button>
-      <div className="polarity-scale" aria-hidden="true"><span>-1 angry</span><i /><span>+1 happy</span></div>
+    <div className="pulse-toolbar mds05-tools">
+      <button type="button" className="tour-trigger" onClick={() => setTourOpen(true)}>▶ TOUR</button>
+      <button type="button" className="glossary-trigger" onClick={() => setGlossaryOpen(true)}>GLOSSARY</button>
     </div>
     {tourOpen && <PulseTour onClose={() => setTourOpen(false)}/>}
     {glossaryOpen && <GlossaryModal onClose={() => setGlossaryOpen(false)}/>}
-    <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} kindCounts={kindCounts}/>
+    <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} kindCounts={kindCounts} filterNotice={filterNotice}/>
     {children}
   </>;
 }
@@ -148,12 +154,42 @@ function DashboardResults({ analysis, results, report }: {
     report: string | null;
 }) {
     const summary = results.result_summary!;
-    const { records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts } = useSliceFilters(results);
+    const { records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts, filterNotice } = useSliceFilters(results);
     const nouns = recordNouns(countKinds(filtered.length ? filtered : records));
+    const summaryNouns = recordNouns({
+        post: summary.kind_breakdown?.post?.count ?? 0,
+        comment: summary.kind_breakdown?.comment?.count ?? 0,
+        unknown: summary.kind_breakdown?.unknown?.count ?? 0,
+    });
     const breakdown = useMemo(() => sentimentBreakdown(filtered), [filtered]);
     const meanPolarity = useMemo(() => mean(filtered.map((record) => record.source_polarity)), [filtered]);
     const meanVader = useMemo(() => mean(filtered.map((record) => record.vader_score)), [filtered]);
-    const trendData = useMemo(() => dailySeries(filtered).map((point) => ({ date: point.date, polarity: point.polarity })), [filtered]);
+    const shares = useMemo(() => emotionShares(filtered), [filtered]);
+    const topEmotion = useMemo(() => dominantEmotion(filtered), [filtered]);
+    const conflictTop = useMemo(() => topConflict(filtered), [filtered]);
+    const volatile = useMemo(() => mostVolatileDay(filtered), [filtered]);
+    const volatileScale = useMemo(() => detectScale(filtered), [filtered]);
+    const truncated = summary.records_after_dedup > records.length;
+    const fullDatasetSelected = useMemo(() => (
+        filters.startDate === defaults.startDate &&
+        filters.endDate === defaults.endDate &&
+        filters.keyword === defaults.keyword &&
+        filters.kind === defaults.kind &&
+        filters.selectedSubreddits.length === defaults.selectedSubreddits.length &&
+        filters.selectedSubreddits.every((value) => defaults.selectedSubreddits.includes(value)) &&
+        filters.selectedConflicts.length === defaults.selectedConflicts.length &&
+        filters.selectedConflicts.every((value) => defaults.selectedConflicts.includes(value))
+    ), [defaults, filters]);
+    const useFullDatasetAggregates = fullDatasetSelected && truncated;
+    const trendData = useMemo(() => {
+        if (useFullDatasetAggregates && summary.trend_dates?.length && summary.polarity_trend?.length) {
+            return summary.trend_dates.map((date, index) => ({
+                date,
+                polarity: summary.polarity_trend?.[index] ?? 0,
+            }));
+        }
+        return dailySeries(filtered).map((point) => ({ date: point.date, polarity: point.polarity }));
+    }, [filtered, summary.polarity_trend, summary.trend_dates, useFullDatasetAggregates]);
     const trendBand = useMemo(() => {
         if (!trendData.length)
             return null;
@@ -162,17 +198,38 @@ function DashboardResults({ analysis, results, report }: {
         const std = Math.sqrt(mean(values.map((value) => (value - avg) ** 2)));
         return { low: avg - std, high: avg + std };
     }, [trendData]);
-    const shares = useMemo(() => emotionShares(filtered), [filtered]);
-    const topEmotion = useMemo(() => dominantEmotion(filtered), [filtered]);
-    const conflictTop = useMemo(() => topConflict(filtered), [filtered]);
-    const volatile = useMemo(() => mostVolatileDay(filtered), [filtered]);
-    const dominant = (Object.entries(breakdown).sort(([, a], [, b]) => b - a)[0] ?? ["neutral", 0])[0] as keyof typeof breakdown;
-    const recentRows = useMemo(() => [...filtered].sort((a, b) => (b.event_date ?? "").localeCompare(a.event_date ?? "")).slice(0, 8), [filtered]);
-    const truncated = summary.records_after_dedup > records.length;
+    const distributionBreakdown = useFullDatasetAggregates ? summary.sentiment_breakdown : breakdown;
+    const dominant = (Object.entries(distributionBreakdown).sort(([, a], [, b]) => b - a)[0] ?? ["neutral", 0])[0] as keyof typeof distributionBreakdown;
+    const insightRecordCount = useFullDatasetAggregates ? summary.records_after_dedup : filtered.length;
+    const displayMeanPolarity = fullDatasetSelected && summary.avg_source_polarity !== undefined
+        ? summary.avg_source_polarity
+        : meanPolarity;
+    const displayMeanVader = fullDatasetSelected ? summary.avg_vader_score : meanVader;
+    const displayConflict = fullDatasetSelected && summary.top_conflict && summary.top_conflict !== "Not available"
+        ? summary.top_conflict
+        : conflictTop;
+    const displayEmotion = fullDatasetSelected && summary.dominant_emotion && summary.dominant_emotion !== "unknown"
+        ? summary.dominant_emotion
+        : topEmotion;
+    const displayVolatile = fullDatasetSelected && summary.most_volatile_day && summary.most_volatile_day !== "Not available"
+        ? { date: summary.most_volatile_day, spread: summary.most_volatile_spread ?? 0, n: summary.most_volatile_n ?? null }
+        : volatile;
+    const displayVolatileIsFrontend = !fullDatasetSelected || !summary.most_volatile_day || summary.most_volatile_day === "Not available";
+    const analysisNouns = summaryNouns.plural === "records" ? nouns : summaryNouns;
+    const sampleDetail = fullDatasetSelected && truncated
+        ? `${(summary.stored_sample_size ?? records.length).toLocaleString()} representative records shown`
+        : `${filtered.length.toLocaleString()} in this slice`;
+    const recentRows = useMemo(() => [...filtered].sort((a, b) => {
+        const dateComparison = (b.event_date ?? "").localeCompare(a.event_date ?? "");
+        return dateComparison || (b.event_time ?? "").localeCompare(a.event_time ?? "");
+    }).slice(0, 8), [filtered]);
     const [tourOpen, setTourOpen] = useState(false);
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     const [guidanceOpen, setGuidanceOpen] = useState(false);
     return <>
+    <details className="mds05-explore-details">
+    <summary><span><b>Explore the analysis</b><small>Open for filters, trends, emotions, and source records</small></span><i aria-hidden="true">+</i></summary>
+    <div className="mds05-explore-body">
     <section className="signal-check" aria-label="Signal check">
       <div>
         <label>SIGNAL CHECK</label>
@@ -191,19 +248,20 @@ function DashboardResults({ analysis, results, report }: {
     </div>
     {tourOpen && <PulseTour onClose={() => setTourOpen(false)}/>}
     {glossaryOpen && <GlossaryModal onClose={() => setGlossaryOpen(false)}/>}
-    <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} kindCounts={kindCounts}/>
+    <AnalysisFilters filters={filters} onChange={setFilters} defaults={defaults} subredditOptions={subredditOptions} conflictOptions={conflictOptions} kindCounts={kindCounts} filterNotice={filterNotice}/>
+    <SampleNotice summary={summary} recordsLength={records.length}/>
     {!filtered.length ? <p className="empty-state">No records match the current filters.</p> : <>
-    <section className="insight" data-tour="insight"><div className="insight-icon">⌁</div><div><label>WHAT THIS MEANS</label><p><b>{dominant}</b> sentiment is the largest signal in this slice of your uploaded dataset, representing {breakdown[dominant]}% of {filtered.length.toLocaleString()} unique records.</p><p className="insight-plain">In plain English: {dominant === "negative" ? (breakdown.negative > 50 ? "more than half of the comments sound upset, critical or hostile." : "the largest group of comments sounds upset, critical or hostile.") : dominant === "positive" ? "the largest group of comments sounds supportive or hopeful." : "the largest group of comments is factual or emotionally flat."}</p><p className="insight-action"><b>Next:</b> open the supporting detail below and read the representative comments before deciding what to change or communicate.</p></div></section>
+    <section className="insight" data-tour="insight"><div className="insight-icon">⌁</div><div><label>WHAT THIS MEANS</label><p><b>{dominant}</b> sentiment is the largest signal in this slice of your uploaded dataset, representing {distributionBreakdown[dominant]}% of {insightRecordCount.toLocaleString()} unique records.</p><p className="insight-plain">In plain English: {dominant === "negative" ? (distributionBreakdown.negative > 50 ? "more than half of the comments sound upset, critical or hostile." : "the largest group of comments sounds upset, critical or hostile.") : dominant === "positive" ? "the largest group of comments sounds supportive or hopeful." : "the largest group of comments is factual or emotionally flat."}</p><p className="insight-action"><b>Next:</b> open the supporting detail below and read the representative comments before deciding what to change or communicate.</p></div></section>
     <section className="metrics" data-tour="metrics">
-      <Metric label="MEAN POLARITY" info={INFO.meanPolarity} value={meanPolarity.toFixed(3)} accent={meanPolarity < 0} detail={`VADER ${meanVader.toFixed(3)}`}/>
-      <Metric label={`${nouns.plural.toUpperCase()} ANALYSED`} info={INFO.commentsAnalysed} value={summary.total_records.toLocaleString()} detail={`${filtered.length.toLocaleString()} in this slice · ${summary.records_after_dedup.toLocaleString()} unique`}/>
-      <Metric label="TOP CONFLICT" info={INFO.topConflict} value={conflictTop ?? "None detected"} detail={conflictTop ? "most represented conflict" : "no conflict terms found in the text"}/>
-      <Metric label="DOMINANT EMOTION" info={INFO.dominantEmotion} value={topEmotion ? DIMENSION_LABELS[topEmotion] : "Not available"} detail="most frequent Hourglass dimension"/>
-      <Metric label="MOST VOLATILE DAY" info={INFO.volatileDay} value={volatile?.date ?? "Not available"} detail={volatile ? `Polarity spread: ${volatile.spread.toFixed(3)}` : "needs dated records"}/>
+      <Metric label="MEAN POLARITY" info={INFO.meanPolarity} value={displayMeanPolarity.toFixed(3)} accent={displayMeanPolarity < 0} detail={`VADER ${displayMeanVader === null ? "Not available" : displayMeanVader.toFixed(3)}`}/>
+      <Metric label={`${analysisNouns.plural.toUpperCase()} ANALYSED`} info={INFO.commentsAnalysed} value={summary.records_after_dedup.toLocaleString()} detail={`${sampleDetail} · from ${summary.total_records.toLocaleString()} collected`}/>
+      <Metric label="TOP CONFLICT" info={INFO.topConflict} value={displayConflict ?? "None detected"} detail={displayConflict ? "most represented conflict" : "no conflict terms found in the text"}/>
+      <Metric label="DOMINANT EMOTION" info={INFO.dominantEmotion} value={displayEmotion && displayEmotion in DIMENSION_LABELS ? DIMENSION_LABELS[displayEmotion as DimensionKey] : "Not available"} detail="most frequent Hourglass dimension"/>
+      <Metric label={!fullDatasetSelected && volatileScale.kind === "time" ? "MOST VOLATILE INTERVAL" : "MOST VOLATILE DAY"} info={INFO.volatileDay} value={displayVolatile?.date ?? "Not available"} detail={displayVolatile ? `Polarity spread: ${displayVolatile.spread.toFixed(3)} · n=${displayVolatile.n ?? "unknown"}${displayVolatileIsFrontend ? " · in the sample" : ""}` : "needs at least 5 dated records in a period"}/>
     </section>
     <section className="analysis-grid">
-      <div className="panel" data-tour="trend"><PanelHeading title="When did public opinion change?" subtitle="3-day rolling mean across the filtered slice" info={INFO.rollingPolarity}/><RollingPolarityChart data={trendData} band={trendBand}/><HowToRead>The <b>line</b> is average mood per day. <b>Below the zero line = negative.</b> The shaded band is the normal range; points outside it are unusual days worth investigating.</HowToRead><DecisionPrompt>Use the unusual date as your starting point: open the comments below to see what may have triggered the change.</DecisionPrompt></div>
-      <div className="panel distribution" data-tour="distribution"><PanelHeading title="How is the conversation split by tone?" subtitle="Share of unique uploaded records in this slice" info={INFO.sentimentDistribution}/>{(["negative", "neutral", "positive"] as const).map((label) => <DistributionRow key={label} label={label} value={breakdown[label]}/>)}<HowToRead>Each comment is sorted into one bucket. The three bars <b>always add up to 100%</b>.</HowToRead><DecisionPrompt>Use this split to choose the review depth: a mostly negative slice needs examples and context, not an automatic conclusion.</DecisionPrompt><p className="coverage">Computed from {filtered.length.toLocaleString()} cleaned records. Scores use VADER and TextBlob for cross-checking.{truncated && ` Figures use an evenly spaced sample of ${records.length.toLocaleString()} of ${summary.records_after_dedup.toLocaleString()} unique records.`}</p></div>
+      <div className="panel" data-tour="trend"><PanelHeading title="When did public opinion change?" subtitle={`${useFullDatasetAggregates ? "3-period rolling mean across all cleaned records" : "3-period rolling mean across the filtered slice"}`} info={INFO.rollingPolarity}/><RollingPolarityChart data={trendData} band={trendBand}/><HowToRead>The <b>line</b> is average mood per observed period. <b>Below the zero line = negative.</b> The shaded band is the normal range; points outside it are unusual periods worth investigating.</HowToRead><DecisionPrompt>Use the unusual period as your starting point: open the comments below to see what may have triggered the change.</DecisionPrompt></div>
+      <div className="panel distribution" data-tour="distribution"><PanelHeading title="How is the conversation split by tone?" subtitle="Share of unique uploaded records in this slice" info={INFO.sentimentDistribution}/>{(["negative", "neutral", "positive"] as const).map((label) => <DistributionRow key={label} label={label} value={distributionBreakdown[label]}/>)}<HowToRead>Each record is sorted into one bucket. One-decimal largest-remainder rounding keeps the displayed total at 100%.</HowToRead><DecisionPrompt>Use this split to choose the review depth: a mostly negative slice needs examples and context, not an automatic conclusion.</DecisionPrompt>{useFullDatasetAggregates ? <p className="coverage">Headline metrics, the sentiment distribution, posts/comments and the trend use all {summary.records_after_dedup.toLocaleString()} cleaned records. The emotion chart and recent list use an evenly spaced sample of {records.length.toLocaleString()} records.</p> : <p className="coverage">Computed from {filtered.length.toLocaleString()} cleaned records. This is a hybrid SenticNet-or-VADER signal.{summary.scoring && ` Engine split: SenticNet ${summary.scoring.records_scored_by_senticnet ?? "n/a"} · precomputed ${summary.scoring.records_precomputed ?? "n/a"} · VADER fallback ${summary.scoring.records_vader_fallback ?? "n/a"}.${truncated ? ` Figures use an evenly spaced sample of ${records.length.toLocaleString()} of ${summary.records_after_dedup.toLocaleString()} unique records.` : ""}`}</p>}{truncated && !useFullDatasetAggregates && <p className="coverage">based on {records.length.toLocaleString()} sampled records</p>}</div>
     </section>
     <details className="supporting-analysis">
       <summary>
@@ -214,14 +272,16 @@ function DashboardResults({ analysis, results, report }: {
         <i aria-hidden="true">+</i>
       </summary>
       <div className="supporting-analysis-body">
-        <PostsVsComments records={filtered}/>
+        <PostsVsComments records={filtered} summary={summary.kind_breakdown} useSummary={useFullDatasetAggregates} sampledRecordCount={truncated && !useFullDatasetAggregates ? records.length : undefined}/>
         <section className="lower-grid">
-      <div className="panel hourglass-panel" data-tour="hourglass"><PanelHeading title="What emotions are driving the discussion?" subtitle="Share of comments whose dominant emotion dimension is each one" info={INFO.hourglassMix}/><div className="hourglass-chart"><div className="hourglass-axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div><div className="hourglass-rows is-share">{DIMENSION_KEYS.map((key) => <div className="hourglass-row" key={key}><span>{DIMENSION_LABELS[key]}</span><div className="hourglass-track" title={`${DIMENSION_LABELS[key]}: ${(shares[key] * 100).toFixed(1)}%`}><i className={`share ${key === "sensitivity" ? "negative" : key === "pleasantness" ? "positive" : "blue"}`} style={{ width: `${shares[key] * 100}%` }}/></div></div>)}</div></div><HowToRead><b>Longest bar</b> = the feeling that dominates the conversation.{topEmotion && <> Here {EMOTION_WORDS[topEmotion]} (<b>{DIMENSION_LABELS[topEmotion]}</b>) lead.</>}</HowToRead></div>
+      <div className="panel hourglass-panel" data-tour="hourglass"><PanelHeading title="Which SenticNet-derived dimensions are present?" subtitle={`Share among ${shares.known.toLocaleString()} of ${shares.total.toLocaleString()} records with an available dimension`} info={INFO.hourglassMix}/>{shares.known ? <><div className="hourglass-chart"><div className="hourglass-axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div><div className="hourglass-rows is-share">{DIMENSION_KEYS.map((key) => <div className="hourglass-row" key={key}><span>{DIMENSION_LABELS[key]}</span><div className="hourglass-track" title={`${DIMENSION_LABELS[key]}: ${(shares[key] * 100).toFixed(1)}%`}><i className={`share ${key === "sensitivity" ? "negative" : key === "pleasantness" ? "positive" : "blue"}`} style={{ width: `${shares[key] * 100}%` }}/></div></div>)}</div></div><HowToRead><b>Longest bar</b> = the most frequent exploratory dimension among records with one available.{topEmotion && <> Here {EMOTION_WORDS[topEmotion]} (<b>{DIMENSION_LABELS[topEmotion]}</b>) lead.</>}</HowToRead></> : <div className="timeline-chart-empty">Emotion dimensions are not available for this input (no SenticNet sentic vectors).</div>}</div>
       <div className="panel events-panel" data-tour="comments"><PanelHeading title="Recent comments" subtitle="Latest scored comments in this slice" info={INFO.recentComments}/><div className="event-list">{recentRows.map((record, index) => <div className="event-row" key={`${record.text}-${index}`}><span className="event-date">{formatDate(record.event_date) ?? `ROW ${String(index + 1).padStart(2, "0")}`}</span><i className={`event-dot ${record.source_polarity < 0 ? "negative" : ""}`}/><div><b>{record.text}</b><p>{kindOf(record) !== "unknown" && <>{kindOf(record).toUpperCase()} · </>}{record.label} · VADER {record.vader_score.toFixed(2)}</p></div><span className={`event-meta ${record.source_polarity < 0 ? "negative" : "positive"}`}>{record.conflict && <em>{record.conflict}</em>}{record.source_polarity >= 0 ? "+" : ""}{record.source_polarity.toFixed(2)}</span></div>)}</div><HowToRead><b>Green dot</b> = positive tone, <b>red dot</b> = negative. Use these to sanity-check the charts.</HowToRead></div>
         </section>
       </div>
     </details>
     </>}
+    </div>
+    </details>
   </>;
 }
 function DashboardGuide({ summary, recordCount }: {
@@ -350,9 +410,9 @@ const INFO: Record<string, InfoContent> = {
     topConflict: { title: "Top conflict", body: <>The conflict mentioned most often in this slice. It is detected by matching conflict-related terms in the comment text. If none are found it reads &ldquo;None detected&rdquo;.</> },
     dominantEmotion: { title: "Dominant emotion", body: <>The <b>Hourglass of Emotions</b> dimension (Pleasantness, Attention, Sensitivity or Aptitude) that is the strongest feeling in the largest number of comments.</> },
     volatileDay: { title: "Most volatile day", body: <>The day when opinions were <b>furthest apart</b>. The polarity spread is the gap between the most positive and the most negative comment that day, so a bigger number means a more divided conversation.</> },
-    rollingPolarity: { title: "Rolling polarity", body: <>Average mood per day, <b>smoothed over 3 days</b> so one odd day does not dominate. Below zero means negative. The shaded band is the normal range (average &plusmn; one standard deviation); points outside it are unusual days.</> },
-    sentimentDistribution: { title: "Sentiment distribution", body: <>Every unique comment is sorted into exactly one bucket: <b>negative</b>, <b>neutral</b> or <b>positive</b>. The three bars always add up to 100%.</> },
-    hourglassMix: { title: "Hourglass mix", body: <>Goes beyond good vs bad. Each comment is tagged with the emotion dimension that dominates it, and each bar shows that dimension&rsquo;s share of all comments: Pleasantness (joy/sadness), Attention (interest/surprise), Sensitivity (fear/anger), Aptitude (trust/disgust).</> },
+    rollingPolarity: { title: "Rolling polarity", body: <>Average mood per observed period, <b>smoothed over the last 3 observed periods</b>. Below zero means negative. The shaded band is the normal range (average &plusmn; one standard deviation).</> },
+    sentimentDistribution: { title: "Sentiment distribution", body: <>Every unique record is sorted into exactly one bucket: <b>negative</b>, <b>neutral</b> or <b>positive</b>. One-decimal largest-remainder rounding keeps the displayed total at 100%.</> },
+    hourglassMix: { title: "Hourglass mix", body: <>These are SenticNet-derived exploratory dimensions. Each bar shows the share among records with an available dimension; records without sentic vectors are excluded from the denominator.</> },
     recentComments: { title: "Recent comments", body: <>The <b>8 latest</b> scored comments in this slice, with their date, label, VADER score and polarity. Read them to check the numbers against what people actually wrote.</> },
 };
 function InfoTip({ title, children }: {

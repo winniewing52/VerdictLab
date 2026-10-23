@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import type { AnalysisResults } from "@/lib/api";
 import { mean, sentimentBreakdown, type ScoredRecord } from "@/lib/analysisData";
 import { kindOf } from "@/lib/recordKind";
 const GROUPS = [
@@ -7,13 +8,26 @@ const GROUPS = [
     { kind: "comment", title: "COMMENTS" },
 ] as const;
 const COLORS = { negative: "#ef4e50", neutral: "#6b7280", positive: "#43ba88" };
-export default function PostsVsComments({ records }: {
+type KindBreakdown = NonNullable<AnalysisResults["result_summary"]>["kind_breakdown"];
+export default function PostsVsComments({ records, summary, useSummary = false, sampledRecordCount }: {
     records: ScoredRecord[];
+    summary?: KindBreakdown;
+    useSummary?: boolean;
+    sampledRecordCount?: number;
 }) {
     const groups = useMemo(() => GROUPS.map(({ kind, title }) => {
         const rows = records.filter((record) => kindOf(record) === kind);
-        return { kind, title, count: rows.length, polarity: mean(rows.map((row) => row.source_polarity)), mix: sentimentBreakdown(rows) };
-    }), [records]);
+        const aggregate = useSummary ? summary?.[kind] : undefined;
+        return {
+            kind,
+            title,
+            count: aggregate?.count ?? rows.length,
+            polarity: aggregate?.avg_polarity ?? mean(rows.map((row) => row.source_polarity)),
+            mix: aggregate
+                ? { positive: aggregate.positive, neutral: aggregate.neutral, negative: aggregate.negative }
+                : sentimentBreakdown(rows),
+        };
+    }), [records, summary, useSummary]);
     if (groups.some((group) => group.count === 0))
         return null;
     return (<section className="panel" data-tour="posts-vs-comments">
@@ -44,5 +58,6 @@ export default function PostsVsComments({ records }: {
         <span>HOW TO READ</span>
         <span>Each bar splits a group into <b>red</b> (negative), <b>grey</b> (neutral) and <b>green</b> (positive). If posts and comments differ a lot, mixing them in one average would hide that.</span>
       </p>
+      {sampledRecordCount !== undefined && <p className="coverage">based on {sampledRecordCount.toLocaleString()} sampled records</p>}
     </section>);
 }

@@ -94,7 +94,7 @@ function LiveInner() {
                 .catch((err: unknown) => {
                 if (err instanceof DOMException && err.name === "AbortError")
                     return;
-                setError(err instanceof Error ? err.message : "Could not analyse that text.");
+                setError(err instanceof TypeError ? "Live text needs the analysis service. Start the backend to try it; the rest of the demo works offline." : err instanceof Error ? err.message : "Could not analyse that text.");
             })
                 .finally(() => {
                 if (!controller.signal.aborted)
@@ -106,7 +106,7 @@ function LiveInner() {
             controller.abort();
         };
     }, [text]);
-    const radarData = result
+    const radarData = result?.hourglass
         ? [
             { dimension: "Pleasantness", value: result.hourglass.pleasantness },
             { dimension: "Attention", value: result.hourglass.attention },
@@ -202,7 +202,7 @@ function LiveInner() {
                 <div data-tour="live-radar">
                 {error ? (<div className="live-empty live-error" role="alert">
                     {error}
-                  </div>) : result ? (<div className="live-radar">
+                  </div>) : result?.hourglass ? (<div className="live-radar">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={radarData} outerRadius={phone ? "52%" : "68%"}>
                         <PolarGrid stroke="#202931"/>
@@ -211,7 +211,7 @@ function LiveInner() {
                         <Radar dataKey="value" stroke="#efa92b" fill="#efa92b" fillOpacity={0.28} strokeWidth={2} isAnimationActive={false}/>
                       </RadarChart>
                     </ResponsiveContainer>
-                  </div>) : (<div className="live-empty">Type or paste some text to see its score.</div>)}
+                  </div>) : result ? (<div className="live-empty">Hourglass dimensions are not available for this text. The score uses the VADER fallback.</div>) : (<div className="live-empty">Type or paste some text to see its score.</div>)}
                 </div>
 
                 <div className="live-footnote" data-tour="live-coverage">

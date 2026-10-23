@@ -22,6 +22,8 @@ export const DIMENSION_COLORS: Record<DimensionKey, string> = {
 export const CONFLICT_PALETTE = ["#f0ae2a", "#ef4e50", "#08afd4", "#43ba88", "#a78bfa", "#fb7185"];
 export const mean = (values: number[]) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0);
 export const round3 = (value: number) => Math.round(value * 1000) / 1000;
+export const MIN_VOLATILITY_N = 5;
+export const UNCLASSIFIED = "Unclassified";
 export function detectConflicts(records: ScoredRecord[]): string[] {
     const counts = new Map<string, number>();
     for (const record of records)
@@ -41,6 +43,11 @@ export function filterRecords(records: ScoredRecord[], filters: AnalysisFilterSt
     subreddit?: boolean;
 }): ScoredRecord[] {
     const keyword = filters.keyword.trim().toLowerCase();
+    const dates = records.map((record) => record.event_date).filter((value): value is string => !!value).sort();
+    const unrestrictedDates = !dates.length || (
+        (!filters.startDate || filters.startDate <= dates[0]) &&
+        (!filters.endDate || filters.endDate >= dates[dates.length - 1])
+    );
     return records.filter((record) => {
         if (record.event_date) {
             if (filters.startDate && record.event_date < filters.startDate)
@@ -48,10 +55,18 @@ export function filterRecords(records: ScoredRecord[], filters: AnalysisFilterSt
             if (filters.endDate && record.event_date > filters.endDate)
                 return false;
         }
-        if (!skip?.conflict && record.conflict && !filters.selectedConflicts.includes(record.conflict))
+        else if (!unrestrictedDates) {
             return false;
-        if (!skip?.subreddit && filters.selectedSubreddits.length && record.subreddit && !filters.selectedSubreddits.some((name) => normSub(name) === normSub(record.subreddit)))
+        }
+        if (!skip?.conflict) {
+            const conflict = record.conflict ?? UNCLASSIFIED;
+            if (!filters.selectedConflicts.includes(conflict))
+                return false;
+        }
+        if (!skip?.subreddit && filters.selectedSubreddits.length &&
+            (!record.subreddit || !filters.selectedSubreddits.some((name) => normSub(name) === normSub(record.subreddit)))) {
             return false;
+        }
         if (keyword && !record.text.toLowerCase().includes(keyword))
             return false;
         if (filters.kind && filters.kind !== "all" && kindOf(record) !== filters.kind)
@@ -69,7 +84,14 @@ function loadSavedFilters(runKey: string, defaults: AnalysisFilterState): Analys
         const strings = (value: unknown): string[] | null => (Array.isArray(value) && value.every((item) => typeof item === "string") ? (value as string[]) : null);
         const date = (value: unknown, fallback: string) => (typeof value === "string" && (value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value)) ? value : fallback);
         return {
-            selectedConflicts: strings(saved.selectedConflicts) ?? defaults.selectedConflicts,
+            selectedConflicts: (() => {
+                const savedConflicts = strings(saved.selectedConflicts);
+                if (!savedConflicts)
+                    return defaults.selectedConflicts;
+                return defaults.selectedConflicts.includes(UNCLASSIFIED) && !savedConflicts.includes(UNCLASSIFIED)
+                    ? [...savedConflicts, UNCLASSIFIED]
+                    : savedConflicts;
+            })(),
             selectedSubreddits: strings(saved.selectedSubreddits) ?? defaults.selectedSubreddits,
             startDate: date(saved.startDate, defaults.startDate),
             endDate: date(saved.endDate, defaults.endDate),
@@ -90,7 +112,10 @@ function saveFilters(runKey: string, filters: AnalysisFilterState) {
 }
 export function useSliceFilters(results: AnalysisResults | null) {
     const records = useMemo(() => (results?.result_records ?? []) as ScoredRecord[], [results]);
-    const conflictOptions = useMemo(() => detectConflicts(records), [records]);
+    const conflictOptions = useMemo(() => {
+        const options = detectConflicts(records);
+        return records.some((record) => !record.conflict) ? [...options, UNCLASSIFIED] : options;
+    }, [records]);
     const subredditOptions = useMemo(() => detectSubreddits(results), [results]);
     const span = useMemo(() => dataDateSpan(records), [records]);
     const runKey = results?.id ?? null;
@@ -106,7 +131,12 @@ export function useSliceFilters(results: AnalysisResults | null) {
     }, [runKey]);
     const filtered = useMemo(() => filterRecords(records, filters), [records, filters]);
     const kindCounts = useMemo(() => countKinds(records), [records]);
-    return { records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts };
+    const filterNotice = useMemo(() => {
+        const undated = records.filter((record) => !record.event_date).length;
+        const unclassified = records.filter((record) => !record.conflict).length;
+        return { undated, unclassified };
+    }, [records]);
+    return { records, filtered, filters, setFilters, defaults, conflictOptions, subredditOptions, kindCounts, filterNotice };
 }
 export function useRunData(runId: string | null, loader: (id: string) => Promise<AnalysisResults>) {
     const [results, setResults] = useState<AnalysisResults | null>(null);
@@ -138,17 +168,32 @@ export function sentimentOf(record: ScoredRecord): "positive" | "neutral" | "neg
 export function sentimentBreakdown(records: ScoredRecord[]) {
     const total = records.length || 1;
     const count = (label: string) => records.filter((record) => sentimentOf(record) === label).length;
-    return {
-        positive: Math.round((1000 * count("positive")) / total) / 10,
-        neutral: Math.round((1000 * count("neutral")) / total) / 10,
-        negative: Math.round((1000 * count("negative")) / total) / 10,
+    const counts = { positive: count("positive"), neutral: count("neutral"), negative: count("negative") };
+    const raw = Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, 1000 * value / total])) as Record<keyof typeof counts, number>;
+    const floors = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Math.floor(value)])) as Record<keyof typeof counts, number>;
+    let remainder = 1000 - Object.values(floors).reduce((sum, value) => sum + value, 0);
+    for (const key of Object.keys(counts).sort((a, b) => (raw[b as keyof typeof raw] - floors[b as keyof typeof floors]) - (raw[a as keyof typeof raw] - floors[a as keyof typeof floors]))) {
+        if (!remainder)
+            break;
+        floors[key as keyof typeof floors] += 1;
+        remainder -= 1;
+    }
+    return Object.fromEntries(Object.entries(floors).map(([key, value]) => [key, value / 10])) as {
+        positive: number;
+        neutral: number;
+        negative: number;
     };
 }
 const emotionOf = (record: ScoredRecord): DimensionKey | null => {
     const value = (record.emotion ?? "").toLowerCase();
     return (DIMENSION_KEYS as readonly string[]).includes(value) ? (value as DimensionKey) : null;
 };
-export function emotionShares(records: ScoredRecord[]): Record<DimensionKey, number> {
+export type EmotionShares = Record<DimensionKey, number> & {
+    known: number;
+    unknown: number;
+    total: number;
+};
+export function emotionShares(records: ScoredRecord[]): EmotionShares {
     const counts: Record<DimensionKey, number> = { pleasantness: 0, attention: 0, sensitivity: 0, aptitude: 0 };
     let total = 0;
     for (const record of records) {
@@ -163,6 +208,9 @@ export function emotionShares(records: ScoredRecord[]): Record<DimensionKey, num
         attention: total ? round3(counts.attention / total) : 0,
         sensitivity: total ? round3(counts.sensitivity / total) : 0,
         aptitude: total ? round3(counts.aptitude / total) : 0,
+        known: total,
+        unknown: records.length - total,
+        total: records.length,
     };
 }
 export function dominantEmotion(records: ScoredRecord[]): DimensionKey | null {
@@ -216,8 +264,8 @@ export function scaleKey(record: ScoredRecord, mode: ScaleMode): string | null {
 }
 export function scaleText(mode: ScaleMode) {
     return mode.kind === "date"
-        ? { unit: "day", rolling: "3-day rolling", per: "daily", peak: "DAY" }
-        : { unit: "time", rolling: `3-point rolling (${mode.bucketMinutes}-min buckets)`, per: `per ${mode.bucketMinutes}-minute`, peak: "TIME" };
+        ? { unit: "day", rolling: "3-period rolling", per: "per observed period", peak: "DAY" }
+        : { unit: "time", rolling: `3-period rolling (${mode.bucketMinutes}-min buckets)`, per: `per ${mode.bucketMinutes}-minute`, peak: "TIME" };
 }
 export function whenLabel(record: ScoredRecord): string {
     if (record.event_time && record.event_date && minutesOfDay(record.event_time) !== null)
@@ -258,6 +306,7 @@ export function dailySeries(records: ScoredRecord[], window = 3, mode: ScaleMode
 export function mostVolatileDay(records: ScoredRecord[], mode: ScaleMode = detectScale(records)): {
     date: string;
     spread: number;
+    n: number;
 } | null {
     const byKey = new Map<string, number[]>();
     for (const record of records) {
@@ -273,13 +322,14 @@ export function mostVolatileDay(records: ScoredRecord[], mode: ScaleMode = detec
     let best: {
         date: string;
         spread: number;
+        n: number;
     } | null = null;
     for (const [key, values] of byKey) {
-        if (values.length < 2)
+        if (values.length < MIN_VOLATILITY_N)
             continue;
         const spread = Math.max(...values) - Math.min(...values);
         if (!best || spread > best.spread)
-            best = { date: key, spread: round3(spread) };
+            best = { date: key, spread: round3(spread), n: values.length };
     }
     return best;
 }
@@ -312,7 +362,9 @@ export function topConcepts(records: ScoredRecord[], limit = 36) {
         .map(([text, entry]) => ({
         text,
         count: entry.count,
-        emotion: DIMENSION_KEYS.reduce((a, b) => (entry.emotions[b] > entry.emotions[a] ? b : a)),
+        emotion: Object.values(entry.emotions).some((value) => value > 0)
+            ? DIMENSION_KEYS.reduce((a, b) => (entry.emotions[b] > entry.emotions[a] ? b : a))
+            : null,
     }));
 }
 export function formatDate(value?: string | null): string | null {

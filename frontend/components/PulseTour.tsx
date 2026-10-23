@@ -9,7 +9,7 @@ export const PULSE_TOUR_STEPS: TourStep[] = [
     { target: "insight", title: "The headline", body: "Start here. One sentence summarises the biggest finding, followed by a plain-English translation." },
     { target: "metrics", title: "Key numbers", body: "Five headline figures: average mood, how many comments were scored, the top conflict, the leading emotion and the most unpredictable day." },
     { target: "trend", title: "Mood over time", body: "The line is the average mood per day. Anything below the dashed zero line is negative. Sharp dips and spikes are days worth investigating." },
-    { target: "distribution", title: "Sentiment split", body: "Every comment lands in exactly one bucket: negative, neutral or positive. The three bars always add up to 100%." },
+    { target: "distribution", title: "Sentiment split", body: "Every record lands in exactly one bucket: negative, neutral or positive. One-decimal rounding keeps the displayed total at 100%." },
     { target: "hourglass", title: "Emotion mix", body: "Beyond good vs bad: which kind of emotion dominates. Sensitivity is fear or anger, Pleasantness is joy or sadness." },
     { target: "comments", title: "Real comments", body: "The latest scored comments in this slice, so you can check the numbers against what people actually wrote." },
 ];

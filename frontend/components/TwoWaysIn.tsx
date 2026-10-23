@@ -168,7 +168,7 @@ export default function TwoWaysIn() {
                     {file ? file.name : "Drop a CSV or Excel file here, or click to browse"}
                   </span>
                   <span className="block mt-2 text-sm text-muted">
-                    CSV, XLS, or XLSX with a text column (comment, body, message, etc.)
+                    CSV, XLS, or XLSX with a text column (comment, body, message, etc.). Large CSV files may take a while to upload.
                   </span>
                 </button>
                 <button type="button" onClick={uploadDataset} disabled={submittingFile} className="mt-6 bg-signal text-ink font-medium px-5 py-3 rounded-sm hover:brightness-95 transition disabled:opacity-60">

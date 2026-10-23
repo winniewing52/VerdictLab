@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 from collections import Counter, defaultdict
 from datetime import datetime
 
@@ -27,6 +28,19 @@ _vader = SentimentIntensityAnalyzer()
 VADER_LABEL_THRESHOLD = 0.2
 SENTIC_LABEL_THRESHOLD = 0.1
 SCORING_ENGINE = "SenticNet 9 (sentic 0.0.9)"
+MIN_VOLATILITY_N = 5
+
+def _largest_remainder_percentages(counts: dict[str, int]) -> dict[str, float]:
+    total = sum(counts.values())
+    if not total:
+        return {key: 0.0 for key in counts}
+    raw = {key: 1000 * value / total for key, value in counts.items()}
+    floors = {key: int(value) for key, value in raw.items()}
+    remainder = 1000 - sum(floors.values())
+    order = sorted(counts, key=lambda key: (raw[key] - floors[key], -list(counts).index(key)), reverse=True)
+    for key in order[:remainder]:
+        floors[key] += 1
+    return {key: value / 10 for key, value in floors.items()}
 def _set_stage(db: Session, analysis: Analysis, key: str, label: str, progress: int, status: str):
     stages = dict(analysis.stages or {})
     stages[key] = {"label": label, "progress": progress, "status": status}
@@ -165,6 +179,7 @@ def run_pipeline(
     analysis_id: str,
     file_bytes: bytes | None = None,
     filename: str | None = None,
+    file_path: str | None = None,
 ):
     db = SessionLocal()
     try:
@@ -194,8 +209,11 @@ def run_pipeline(
                 records = ingest.ingest_reddit(analysis.source_url)
             elif analysis.source_type == "youtube":
                 records = ingest.ingest_youtube(analysis.source_url)
-            elif analysis.source_type == "csv" and file_bytes:
-                records = ingest.ingest_file(file_bytes, filename or analysis.uploaded_filename)
+            elif analysis.source_type == "csv" and (file_bytes or file_path):
+                records = ingest.ingest_file(
+                    file_path or file_bytes,
+                    filename or analysis.uploaded_filename,
+                )
             else:
                 records = []
         except Exception as exc:
@@ -221,11 +239,18 @@ def run_pipeline(
         _set_stage(db, analysis, "cleaning_dedup", "Cleaning & dedup", 10, "running")
         privacy_mode = analysis.privacy_mode if analysis.privacy_mode in privacy.MODES else "redacted"
         redaction_totals: Counter = Counter()
+        removed_by_reason: Counter = Counter()
         cleaned, seen = [], set()
         for i, r in enumerate(records):
             original = _record_text(r)
             c = _clean(original)
-            if c and c.lower() not in seen and len(c) > 3:
+            if not c:
+                removed_by_reason["empty_after_cleaning"] += 1
+            elif len(c) <= 3:
+                removed_by_reason["three_characters_or_fewer"] += 1
+            elif c.lower() in seen:
+                removed_by_reason["duplicate"] += 1
+            else:
                 seen.add(c.lower())
                 stored_text, redaction_counts = privacy.apply_privacy(original, privacy_mode)
                 redaction_totals.update(redaction_counts)
@@ -253,17 +278,36 @@ def run_pipeline(
             text = item["text"]
             metadata = item["metadata"]
 
-
-            sn = sentic.score_text(text)
-            use_sn = sentic.usable(sn)
-
-
-            vader = _vader.polarity_scores(text)["compound"]
-            textblob = TextBlob(text).sentiment.polarity
+            # Large scored exports commonly already contain the model outputs.
+            # Reusing them avoids running three Python NLP models once per row.
+            # Emotion still requires SenticNet sentic vectors, which these
+            # exports do not provide, so it remains explicitly unavailable.
+            has_precomputed = (
+                _number(metadata.get("sentic_polarity")) is not None
+                and _number(metadata.get("vader_compound")) is not None
+            )
+            if has_precomputed:
+                sn = {
+                    "polarity": _number(metadata.get("sentic_polarity")) or 0.0,
+                    "coverage": 0.0,
+                    "n_tokens": 0,
+                    "n_matched": 0,
+                    "concepts": [],
+                    "sentics": None,
+                    "moodtags": [],
+                }
+                use_sn = False
+                vader = _number(metadata.get("vader_compound")) or 0.0
+                textblob = None
+            else:
+                sn = sentic.score_text(text)
+                use_sn = sentic.usable(sn)
+                vader = _vader.polarity_scores(text)["compound"]
+                textblob = TextBlob(text).sentiment.polarity
 
 
             polarity = sn["polarity"] if use_sn else vader
-            engine = "senticnet" if use_sn else "vader_fallback"
+            engine = "senticnet" if use_sn else ("precomputed" if has_precomputed else "vader_fallback")
             threshold = SENTIC_LABEL_THRESHOLD if use_sn else VADER_LABEL_THRESHOLD
             label = "positive" if polarity > threshold else "negative" if polarity < -threshold else "neutral"
             vader_label = "positive" if vader > VADER_LABEL_THRESHOLD else "negative" if vader < -VADER_LABEL_THRESHOLD else "neutral"
@@ -278,7 +322,7 @@ def run_pipeline(
                 "source_polarity": round(polarity, 3),
                 "source_label": label,
                 "engine": engine,
-                "sentic_coverage": sn["coverage"],
+                "sentic_coverage": None if has_precomputed else sn["coverage"],
                 "sentic_concepts": [c["concept"] for c in sn["concepts"][:8]],
                 "sentics": sn["sentics"] if use_sn else None,
                 "moodtags": sn["moodtags"] if use_sn else [],
@@ -296,14 +340,12 @@ def run_pipeline(
                 "emotion": emotion,
                 "emotion_source": emotion_source,
                 "label": vader_label,
-                "explanation": _explain(sn if use_sn else None, polarity, vader),
+                "explanation": "Precomputed polarity supplied by the input file."
+                if has_precomputed else _explain(sn if use_sn else None, polarity, vader),
             })
             if i % max(1, len(cleaned) // 8) == 0:
                 pct = int(min(95, (i / max(1, len(cleaned))) * 100))
                 _set_stage(db, analysis, "model_comparison", "Model comparison", pct, "running")
-        _set_stage(db, analysis, "model_comparison", "Model comparison", 100, "done")
-
-
         words = re.findall(r"[a-zA-Z']{4,}", " ".join(item["text"] for item in cleaned).lower())
         words = [w for w in words if w not in STOPWORDS]
         top_topics = [w for w, _ in Counter(words).most_common(10)]
@@ -324,10 +366,10 @@ def run_pipeline(
             emotion_counts[score["emotion"]] += 1
         volatile_day = max(
             daily_polarity.items(),
-            key=lambda entry: (max(entry[1]) - min(entry[1])) if len(entry[1]) > 1 else -1,
+            key=lambda entry: (max(entry[1]) - min(entry[1])) if len(entry[1]) >= MIN_VOLATILITY_N else -1,
             default=(None, []),
         )
-        volatile_spread = round(max(volatile_day[1]) - min(volatile_day[1]), 3) if len(volatile_day[1]) > 1 else None
+        volatile_spread = round(max(volatile_day[1]) - min(volatile_day[1]), 3) if len(volatile_day[1]) >= MIN_VOLATILITY_N else None
         trend_dates = sorted(daily_polarity.keys())
         daily_avg_polarity = {date: sum(values) / len(values) for date, values in daily_polarity.items()}
         daily_volume = {date: len(values) for date, values in daily_polarity.items()}
@@ -349,13 +391,17 @@ def run_pipeline(
             "total_records": len(records),
             "records_after_dedup": len(cleaned),
             "dedup_rate_pct": dedup_rate,
-            "sentiment_breakdown": {
-                "positive": round(100 * counts.get("positive", 0) / total, 1),
-                "neutral": round(100 * counts.get("neutral", 0) / total, 1),
-                "negative": round(100 * counts.get("negative", 0) / total, 1),
-            },
-            "avg_vader_score": round(sum(s["vader_score"] for s in scored) / total, 3),
-            "avg_textblob_score": round(sum(s["textblob_score"] for s in scored) / total, 3),
+            "sentiment_breakdown": _largest_remainder_percentages({
+                "positive": counts.get("positive", 0),
+                "neutral": counts.get("neutral", 0),
+                "negative": counts.get("negative", 0),
+            }),
+            "avg_vader_score": round(sum(s["vader_score"] for s in scored) / total, 3) if scored else None,
+            "avg_textblob_score": (
+                round(sum(s["textblob_score"] for s in scored if s["textblob_score"] is not None) /
+                      sum(s["textblob_score"] is not None for s in scored), 3)
+                if any(s["textblob_score"] is not None for s in scored) else None
+            ),
             "avg_source_polarity": round(sum(s["source_polarity"] for s in scored) / total, 3),
 
             "scoring": _scoring_audit(scored),
@@ -377,6 +423,7 @@ def run_pipeline(
             "dominant_emotion": emotion_counts.most_common(1)[0][0] if emotion_counts else "Not available",
             "most_volatile_day": volatile_day[0] or "Not available",
             "most_volatile_spread": volatile_spread,
+            "most_volatile_n": len(volatile_day[1]) if volatile_spread is not None else None,
             "top_topics": top_topics,
             "quality_score": None,
             "data_quality": {
@@ -384,6 +431,7 @@ def run_pipeline(
                 "records_after_dedup": len(cleaned),
                 "dedup_rate_pct": dedup_rate,
                 "interpretation": "Input hygiene only; not a model accuracy score.",
+                "removed_by_reason": dict(removed_by_reason),
             },
             "polarity_trend": polarity_trend,
             "trend_dates": trend_dates,
@@ -398,6 +446,10 @@ def run_pipeline(
         analysis.result_summary = summary
         analysis.result_records = _representative_sample(scored, MAX_STORED_RECORDS)
         analysis.report_markdown = _build_report(analysis, summary, top_topics)
+        # Keep the visible stage honest while the final summary and sample are
+        # still being built. The analysis must not look complete until results
+        # and the report have been persisted.
+        _set_stage(db, analysis, "model_comparison", "Model comparison", 100, "done")
         analysis.status = "complete"
         db.add(analysis)
         db.commit()
@@ -411,6 +463,11 @@ def run_pipeline(
             db.commit()
     finally:
         db.close()
+        if file_path:
+            try:
+                os.unlink(file_path)
+            except FileNotFoundError:
+                pass
 
 MAX_STORED_RECORDS = 5000
 
@@ -466,12 +523,19 @@ def _explain(sn: dict | None, polarity: float, vader_score: float) -> str:
 def _scoring_audit(scored: list[dict]) -> dict:
     n = len(scored) or 1
     used = [s for s in scored if s["engine"] == "senticnet"]
+    precomputed = [s for s in scored if s["engine"] == "precomputed"]
+    fallback = [s for s in scored if s["engine"] == "vader_fallback"]
+    coverages = [s["sentic_coverage"] for s in scored if s["sentic_coverage"] is not None]
     return {
         "engine": SCORING_ENGINE,
         "records_scored_by_senticnet": len(used),
-        "records_vader_fallback": len(scored) - len(used),
+        "records_precomputed": len(precomputed),
+        "records_vader_fallback": len(fallback),
         "senticnet_usable_pct": round(100 * len(used) / n, 1),
-        "mean_concept_coverage_pct": round(100 * sum(s["sentic_coverage"] for s in scored) / n, 1),
+        "mean_concept_coverage_pct": (
+            round(100 * sum(coverages) / len(coverages), 1)
+            if coverages else None
+        ),
         "min_coverage_threshold_pct": round(100 * sentic.MIN_COVERAGE),
         "emotion_sources": dict(Counter(s["emotion_source"] for s in scored)),
     }
@@ -491,20 +555,23 @@ def _build_report(analysis: Analysis, summary: dict, topics: list[str]) -> str:
 - Neutral: {sb['neutral']}%
 - Negative: {sb['negative']}%
 
-Average VADER compound score: {summary['avg_vader_score']} | Average TextBlob polarity: {summary['avg_textblob_score']}
+Average VADER compound score: {summary['avg_vader_score'] if summary['avg_vader_score'] is not None else "Not available"} | Average TextBlob polarity: {summary['avg_textblob_score'] if summary['avg_textblob_score'] is not None else "Not available"}
 
 ## Top discussion topics
 {", ".join(topics) if topics else "Not enough signal to extract topics."}
 
 ## Methodology
-Every de-duplicated record was scored with SenticNet 9 (concept-level lookup with
+Every record scored by SenticNet used SenticNet 9 (concept-level lookup with
 multi-word concepts, polarity and the four Hourglass dimensions). Records where fewer
 than {int(sentic.MIN_COVERAGE * 100)}% of the content words were found in SenticNet fall back to VADER and are
 flagged as such. VADER and TextBlob were also run on every record as baselines so scores
 can be cross-checked. Each record's explanation lists the SenticNet concepts behind its score.
+Rows with supplied polarity columns are reported as precomputed and do not have
+SenticNet concept coverage or Hourglass vectors available.
 
 ## SenticNet coverage
 - Scored by SenticNet: {summary['scoring']['senticnet_usable_pct']}% of records
+- Precomputed scores reused: {summary['scoring'].get('records_precomputed', 0)} records
 - VADER fallback: {summary['scoring']['records_vader_fallback']} records
-- Mean concept coverage: {summary['scoring']['mean_concept_coverage_pct']}%
+- Mean concept coverage: {summary['scoring']['mean_concept_coverage_pct'] if summary['scoring']['mean_concept_coverage_pct'] is not None else "Not available"}%
 """
