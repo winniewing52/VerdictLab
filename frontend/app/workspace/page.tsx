@@ -217,7 +217,7 @@ function DashboardResults({ analysis, results, report }: {
     const displayVolatileIsFrontend = !fullDatasetSelected || !summary.most_volatile_day || summary.most_volatile_day === "Not available";
     const analysisNouns = summaryNouns.plural === "records" ? nouns : summaryNouns;
     const sampleDetail = fullDatasetSelected && truncated
-        ? `${(summary.stored_sample_size ?? records.length).toLocaleString()} representative records shown`
+        ? `${(summary.stored_sample_size ?? records.length).toLocaleString()} shown · full dataset analysed`
         : `${filtered.length.toLocaleString()} in this slice`;
     const recentRows = useMemo(() => [...filtered].sort((a, b) => {
         const dateComparison = (b.event_date ?? "").localeCompare(a.event_date ?? "");
@@ -227,8 +227,6 @@ function DashboardResults({ analysis, results, report }: {
     const [glossaryOpen, setGlossaryOpen] = useState(false);
     const [guidanceOpen, setGuidanceOpen] = useState(false);
     return <>
-    <details className="mds05-explore-details">
-    <summary><span><b>Explore the analysis</b><small>Open for filters, trends, emotions, and source records</small></span><i aria-hidden="true">+</i></summary>
     <div className="mds05-explore-body">
     <section className="signal-check" aria-label="Signal check">
       <div>
@@ -254,7 +252,7 @@ function DashboardResults({ analysis, results, report }: {
     <section className="insight" data-tour="insight"><div className="insight-icon">⌁</div><div><label>WHAT THIS MEANS</label><p><b>{dominant}</b> sentiment is the largest signal in this slice of your uploaded dataset, representing {distributionBreakdown[dominant]}% of {insightRecordCount.toLocaleString()} unique records.</p><p className="insight-plain">In plain English: {dominant === "negative" ? (distributionBreakdown.negative > 50 ? "more than half of the comments sound upset, critical or hostile." : "the largest group of comments sounds upset, critical or hostile.") : dominant === "positive" ? "the largest group of comments sounds supportive or hopeful." : "the largest group of comments is factual or emotionally flat."}</p><p className="insight-action"><b>Next:</b> open the supporting detail below and read the representative comments before deciding what to change or communicate.</p></div></section>
     <section className="metrics" data-tour="metrics">
       <Metric label="MEAN POLARITY" info={INFO.meanPolarity} value={displayMeanPolarity.toFixed(3)} accent={displayMeanPolarity < 0} detail={`VADER ${displayMeanVader === null ? "Not available" : displayMeanVader.toFixed(3)}`}/>
-      <Metric label={`${analysisNouns.plural.toUpperCase()} ANALYSED`} info={INFO.commentsAnalysed} value={summary.records_after_dedup.toLocaleString()} detail={`${sampleDetail} · from ${summary.total_records.toLocaleString()} collected`}/>
+      <Metric label={`${analysisNouns.plural.toUpperCase()} ANALYSED`} info={INFO.commentsAnalysed} value={summary.records_after_dedup.toLocaleString()} detail={sampleDetail}/>
       <Metric label="TOP CONFLICT" info={INFO.topConflict} value={displayConflict ?? "None detected"} detail={displayConflict ? "most represented conflict" : "no conflict terms found in the text"}/>
       <Metric label="DOMINANT EMOTION" info={INFO.dominantEmotion} value={displayEmotion && displayEmotion in DIMENSION_LABELS ? DIMENSION_LABELS[displayEmotion as DimensionKey] : "Not available"} detail="most frequent Hourglass dimension"/>
       <Metric label={!fullDatasetSelected && volatileScale.kind === "time" ? "MOST VOLATILE INTERVAL" : "MOST VOLATILE DAY"} info={INFO.volatileDay} value={displayVolatile?.date ?? "Not available"} detail={displayVolatile ? `Polarity spread: ${displayVolatile.spread.toFixed(3)} · n=${displayVolatile.n ?? "unknown"}${displayVolatileIsFrontend ? " · in the sample" : ""}` : "needs at least 5 dated records in a period"}/>
@@ -281,7 +279,6 @@ function DashboardResults({ analysis, results, report }: {
     </details>
     </>}
     </div>
-    </details>
   </>;
 }
 function DashboardGuide({ summary, recordCount }: {
@@ -406,7 +403,7 @@ const EMOTION_WORDS: Record<DimensionKey, string> = {
 };
 const INFO: Record<string, InfoContent> = {
     meanPolarity: { title: "Mean polarity", body: <>The <b>average tone</b> of every comment in the current slice, from <b>-1</b> (very negative) to <b>+1</b> (very positive). Around 0 is neutral. It turns red when the crowd leans negative. The VADER figure underneath is a second, independent scorer used as a cross-check.</> },
-    commentsAnalysed: { title: "Comments analysed", body: <>How many comments were scored in total. The line below shows how many are in the <b>current slice</b> (after your filters) and how many are <b>unique</b> once duplicates are removed.</> },
+    commentsAnalysed: { title: "Comments analysed", body: <>The headline number is the full cleaned dataset used for the Pulse calculations. When the dataset is large, the evidence view shows an evenly spaced sample of up to 5,000 records for fast inspection.</> },
     topConflict: { title: "Top conflict", body: <>The conflict mentioned most often in this slice. It is detected by matching conflict-related terms in the comment text. If none are found it reads &ldquo;None detected&rdquo;.</> },
     dominantEmotion: { title: "Dominant emotion", body: <>The <b>Hourglass of Emotions</b> dimension (Pleasantness, Attention, Sensitivity or Aptitude) that is the strongest feeling in the largest number of comments.</> },
     volatileDay: { title: "Most volatile day", body: <>The day when opinions were <b>furthest apart</b>. The polarity spread is the gap between the most positive and the most negative comment that day, so a bigger number means a more divided conversation.</> },

@@ -63,7 +63,7 @@ export default function AnalysisFilters({ filters, onChange, defaults, subreddit
         </div>)}
 
       <div className="fbar-controls">
-        {filterNotice && (filterNotice.undated > 0 || filterNotice.unclassified > 0) && <span className="fbar-label">{[filterNotice.undated > 0 ? `${filterNotice.undated.toLocaleString()} undated records` : "", filterNotice.unclassified > 0 ? `${filterNotice.unclassified.toLocaleString()} unclassified records` : ""].filter(Boolean).join(" · ")}</span>}
+        {filterNotice && filterNotice.undated > 0 && <span className="fbar-label">{filterNotice.undated.toLocaleString()} undated records</span>}
         <div className="fbar-dates" role="group" aria-label="Date range">
           <span className="fbar-label">DATE RANGE</span>
           <input type="date" value={filters.startDate} max={filters.endDate} onChange={(event) => onChange({ ...filters, startDate: event.target.value })} aria-label="Start date"/>
