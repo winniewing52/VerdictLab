@@ -102,7 +102,7 @@ function EmotionsInner() {
 
           {state ? (!runId && !resolving && !loading ? <NoAnalysisSelected /> : <div className="timeline-chart-empty">{state}</div>) : (<>
           <div className="two-col-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 11 }}>
-            <section className="panel" data-tour="emotions-radar" style={PANEL_COLUMN}>
+            <section className="panel" data-tour="emotions-radar" style={{ ...PANEL_COLUMN, minWidth: 0 }}>
               <div className="panel-heading">
                 <div>
                   <h2>Which emotions dominate each conflict?</h2>
@@ -119,7 +119,7 @@ function EmotionsInner() {
                 </div>
               </div>
               <div style={{ height: 340, padding: "10px 8px 4px" }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <RadarChart data={radarData} outerRadius={phone ? "54%" : "72%"}>
                     <PolarGrid stroke="#202931"/>
                     <PolarAngleAxis dataKey="dimension" tick={{ fill: "#8b949c", fontSize: 11 }}/>
@@ -134,7 +134,7 @@ function EmotionsInner() {
               </HowToRead>
             </section>
 
-            <section className="panel" data-tour="emotions-stream" style={PANEL_COLUMN}>
+            <section className="panel" data-tour="emotions-stream" style={{ ...PANEL_COLUMN, minWidth: 0 }}>
               <div className="panel-heading">
                 <div>
                   <h2>When did the emotional mix shift?</h2>
@@ -143,7 +143,7 @@ function EmotionsInner() {
                 <InfoTip title={INFO.stream.title}>{INFO.stream.body}</InfoTip>
               </div>
               <div style={{ height: 340, padding: "10px 8px 4px" }}>
-                {streamData.length ? (<ResponsiveContainer width="100%" height="100%">
+                {streamData.length ? (<ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <AreaChart data={streamData}>
                     <CartesianGrid stroke="#202931" strokeDasharray="2 4" vertical={false}/>
                     <XAxis dataKey="date" tick={{ fill: "#66717a", fontSize: 9 }} tickLine={false} minTickGap={scale.kind === "time" ? 36 : 60}/>

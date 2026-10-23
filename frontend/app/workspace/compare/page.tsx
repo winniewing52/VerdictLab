@@ -165,7 +165,7 @@ function CompareInner() {
 
           {resolving || loading ? (<div className="timeline-chart-empty">Loading your data…</div>) : !runId ? (<NoAnalysisSelected />) : error ? (<div className="timeline-chart-empty">{error}</div>) : !records.length ? (<div className="timeline-chart-empty">This analysis has no scored comments.</div>) : (<>
           <div className="compare-grid">
-            <section className="panel" data-tour="compare-polarity" style={PANEL_COLUMN}>
+            <section className="panel" data-tour="compare-polarity" style={{ ...PANEL_COLUMN, minWidth: 0 }}>
               <div className="panel-heading">
                 <div>
                   <h2>Which communities lean positive or negative?</h2>
@@ -181,7 +181,7 @@ function CompareInner() {
               </HowToRead>
             </section>
 
-            <section className="panel" data-tour="compare-sensitivity" style={PANEL_COLUMN}>
+            <section className="panel" data-tour="compare-sensitivity" style={{ ...PANEL_COLUMN, minWidth: 0 }}>
               <div className="panel-heading">
                 <div>
                   <h2>Which communities sound most emotionally charged?</h2>
@@ -216,7 +216,7 @@ function CompareInner() {
             </div>
             {conflictStats.length && conflictStats.some((stat) => stat.shares.known > 0) ? (<>
                 <div style={{ height: 380, padding: "10px 8px 4px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <RadarChart data={radarData} outerRadius={phone ? "54%" : "72%"}>
                       <PolarGrid stroke="#202931"/>
                       <PolarAngleAxis dataKey="dimension" tick={{ fill: "#8b949c", fontSize: 11 }}/>
@@ -264,7 +264,7 @@ function CompareInner() {
                       {` · ${row.n.toLocaleString()} records`}
                     </small>
                     <div style={{ height: 190 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <RadarChart data={data} outerRadius={phone ? "56%" : "66%"}>
                           <PolarGrid stroke="#202931"/>
                           <PolarAngleAxis dataKey="dimension" tick={{ fill: "#8b949c", fontSize: 9 }}/>
@@ -294,7 +294,7 @@ function SubredditBars({ data, metric }: {
 }) {
     const isPolarity = metric === "polarity";
     const phone = useMediaQuery("(max-width: 620px)");
-    return (<ResponsiveContainer width="100%" height={Math.max(190, data.length * 50 + 40)}>
+    return (<ResponsiveContainer width="100%" height={Math.max(190, data.length * 50 + 40)} minWidth={0} minHeight={0}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 0 }} barCategoryGap="12%">
         <XAxis type="number" domain={isPolarity
             ? [(min: number) => Math.min(-0.1, Math.floor((min - 0.05) * 10) / 10), (max: number) => Math.max(0.1, Math.ceil((max + 0.05) * 10) / 10)]
